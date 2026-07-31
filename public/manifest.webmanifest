@@ -1,0 +1,26 @@
+{
+  "name": "FinRoute — Lender Command Center",
+  "short_name": "FinRoute",
+  "description": "Modern lending platform — Guest Workspace digital collection book and full ERP in one installable app.",
+  "start_url": "/app",
+  "scope": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1220",
+  "theme_color": "#1e40af",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "/logo-removebg-preview (1).png", "sizes": "any", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-removebg-preview (1).png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Guest Dashboard", "url": "/app", "description": "Free digital collection book" },
+    { "name": "Record Collection", "url": "/app/collections/new", "description": "Log a payment quickly" },
+    { "name": "Route Sheet", "url": "/app/collections/batch", "description": "Bulk collection sheet" },
+    { "name": "Customers", "url": "/app/customers", "description": "Guest customer directory" },
+    { "name": "ERP Dashboard", "url": "/erp", "description": "Open the full ERP" },
+    { "name": "ERP Collections", "url": "/erp/collections", "description": "Today's ERP collections" },
+    { "name": "Reconciliation", "url": "/erp/reconciliation", "description": "End-of-day cash close" }
+  ]
+}
