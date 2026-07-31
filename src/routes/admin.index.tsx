@@ -74,7 +74,7 @@ function AdminDashboard() {
       <Card className="p-6">
         <CardHeader className="p-0 mb-4">
           <CardTitle>Super Admin Status</CardTitle>
-          <CardDescription>Live backend connected at http://localhost:8000/api/v1/admin/</CardDescription>
+          <CardDescription>Live backend connected at {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/admin/</CardDescription>
         </CardHeader>
         <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300">
           <p className="font-semibold">✓ Backend API Connection Active</p>
