@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter,
+  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar
 } from "@/components/ui/sidebar";
 
 const nav = [
@@ -24,13 +24,21 @@ const more = [
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/app" className="flex items-center gap-2 px-2 py-1.5">
+        <Link to="/app" onClick={handleNavClick} className="flex items-center gap-2 px-2 py-1.5">
           <img src="/logo-removebg-preview (1).png" alt="FinRoute" className="size-8 object-contain" />
           <span className="truncate font-display text-base font-bold">FinRoute</span>
         </Link>
@@ -43,7 +51,7 @@ export function AppSidebar() {
               {nav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url, item.exact)} tooltip={item.title} data-tour={item.tour}>
-                    <Link to={item.url}>
+                    <Link to={item.url} onClick={handleNavClick}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -60,7 +68,7 @@ export function AppSidebar() {
               {more.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                    <Link to={item.url}>
+                    <Link to={item.url} onClick={handleNavClick}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -69,7 +77,7 @@ export function AppSidebar() {
               ))}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/app/upgrade"} tooltip="Upgrade">
-                  <Link to="/app/upgrade">
+                  <Link to="/app/upgrade" onClick={handleNavClick}>
                     <Sparkles />
                     <span>Upgrade</span>
                   </Link>
@@ -83,7 +91,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Log out">
-              <Link to="/login">
+              <Link to="/login" onClick={handleNavClick}>
                 <LogOut />
                 <span>Log out</span>
               </Link>

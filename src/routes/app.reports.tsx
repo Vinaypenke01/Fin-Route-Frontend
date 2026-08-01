@@ -9,9 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye } from "lucide-react";
+import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye, Image as ImageIcon } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
+import { downloadFinancialReportImage } from "@/lib/download-report-image";
 
 export const Route = createFileRoute("/app/reports")({
   head: () => ({ meta: [{ title: "Reports & Financial Summary — FinRoute" }, { name: "description", content: "Daily, day-wise, and net financial collection & expense reports." }] }),
@@ -288,6 +289,15 @@ function ReportsPage() {
     }
   };
 
+  const handleExportReportImage = () => {
+    downloadFinancialReportImage(dailySummaries, {
+      dateFrom,
+      dateTo,
+      dayFilter: selectedDay,
+      workspaceName: "FinRoute Finance Workspace",
+    });
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -298,12 +308,20 @@ function ReportsPage() {
             Track daily collections, route day breakdowns, and net revenue after deducting operational expenses.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer className="size-4 mr-1.5" /> Print Statement
           </Button>
           <Button size="sm" onClick={() => handleExportCsv("summary")} className="bg-primary text-primary-foreground font-semibold">
             <Download className="size-4 mr-1.5" /> Export Net Summary CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportReportImage}
+            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-semibold dark:bg-emerald-950 dark:text-emerald-300"
+          >
+            <ImageIcon className="size-4 mr-1.5" /> Report Image
           </Button>
         </div>
       </div>

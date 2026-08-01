@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter,
+  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar
 } from "@/components/ui/sidebar";
 
 const platform = [
@@ -34,6 +34,14 @@ const account = [
 
 export function AdminSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   const isActive = (url: string, exact?: boolean) =>
     exact ? pathname === url : pathname === url || pathname.startsWith(url + "/");
 
@@ -45,7 +53,7 @@ export function AdminSidebar() {
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild isActive={isActive(item.url, (item as { exact?: boolean }).exact)} tooltip={item.title}>
-                <Link to={item.url}>
+                <Link to={item.url} onClick={handleNavClick}>
                   <item.icon />
                   <span>{item.title}</span>
                 </Link>
@@ -60,7 +68,7 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/admin" className="flex items-center gap-2 px-2 py-1.5">
+        <Link to="/admin" onClick={handleNavClick} className="flex items-center gap-2 px-2 py-1.5">
           <img src="/logo-removebg-preview (1).png" alt="FinRoute" className="size-8 object-contain" />
           <span className="truncate font-display text-base font-bold">FinRoute <span className="text-xs font-medium text-muted-foreground">Admin</span></span>
         </Link>
@@ -74,7 +82,7 @@ export function AdminSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Log out">
-              <Link to="/login">
+              <Link to="/login" onClick={handleNavClick}>
                 <LogOut />
                 <span>Log out</span>
               </Link>

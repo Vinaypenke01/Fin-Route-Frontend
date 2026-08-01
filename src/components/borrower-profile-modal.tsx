@@ -3,9 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Eye, Check } from "lucide-react";
+import { Eye, Check, Download, Image as ImageIcon } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { Customer, Collection, guestWorkspaceService } from "@/lib/services/guest-workspace-service";
+import { downloadCustomerCardImage } from "@/lib/download-customer-image";
 
 function InstallmentPassbookGrid({ total = 20, paid = 0 }: { total?: number; paid?: number }) {
   const safeTotal = Math.min(Math.max(total || 1, 1), 100);
@@ -194,7 +195,16 @@ export function BorrowerProfileDetailsModal({
           </div>
         </div>
 
-        <DialogFooter className="pt-2">
+        <DialogFooter className="pt-2 flex items-center justify-between sm:justify-between gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold gap-1.5 shadow-xs"
+            onClick={() => downloadCustomerCardImage(activeCustomer, undefined, history)}
+          >
+            <ImageIcon className="size-4" /> Download Passbook Image
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
             Close
           </Button>

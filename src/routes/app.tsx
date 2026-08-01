@@ -14,6 +14,8 @@ import { OnboardingTour, useOnboarding } from "@/components/onboarding-tour";
 import { InstallPrompt, InstallStatusBadge } from "@/components/install-prompt";
 import { UpgradeUpsellModal } from "@/components/upgrade-upsell-modal";
 
+import { GuestMobileBottomNav } from "@/components/guest-mobile-nav";
+
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Guest Workspace — FinRoute" }, { name: "description", content: "Your free digital collection book." }] }),
   beforeLoad: () => requireRole("guest", "/login"),
@@ -43,11 +45,11 @@ function AppLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-muted/30">
+      <div className="flex min-h-screen w-full bg-muted/30 pb-20 sm:pb-0">
         <AppSidebar />
         <SidebarInset className="min-w-0">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6">
-            <SidebarTrigger />
+            <SidebarTrigger className="hidden sm:inline-flex" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="truncate font-display text-lg font-semibold">{title}</h1>
@@ -107,6 +109,7 @@ function AppLayout() {
           </main>
         </SidebarInset>
       </div>
+      <GuestMobileBottomNav />
       <Toaster />
       <OnboardingTour open={tour.open} onClose={tour.close} />
       <InstallPrompt appName="FinRoute Guest Workspace" />

@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare, Image as ImageIcon } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { BorrowerProfileDetailsModal } from "@/components/borrower-profile-modal";
 import { guestWorkspaceService, Customer, WorkspaceData, Collection } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
+import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/download-customer-image";
 
 export const Route = createFileRoute("/app/customers")({
   head: () => ({ meta: [{ title: "Customers — FinRoute" }, { name: "description", content: "Manage your customers, loans and collection history." }] }),
@@ -71,8 +73,8 @@ function InstallmentPassbookGrid({ total = 20, paid = 0 }: { total?: number; pai
               key={num}
               title={isPaid ? `Installment #${num}: PAID (Struck Through)` : `Installment #${num}: Pending`}
               className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${isPaid
-                  ? "bg-emerald-600 text-white border-emerald-700 line-through opacity-85 shadow-xs"
-                  : "bg-background text-muted-foreground border-border/80"
+                ? "bg-emerald-600 text-white border-emerald-700 line-through opacity-85 shadow-xs"
+                : "bg-background text-muted-foreground border-border/80"
                 }`}
             >
               {isPaid ? <s>{num}</s> : num}
@@ -96,6 +98,7 @@ function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
   // Collection Days Configuration State
   const [configuredDays, setConfiguredDays] = useState<string[]>([]);
@@ -185,7 +188,7 @@ function CustomersPage() {
       setWorkspace(updatedWs);
       setConfiguredDays(draftDays);
       setEditingDays(false);
-      
+
       // Reload customers so all updated borrower route days reflect instantly
       await loadCustomers();
 
@@ -307,10 +310,10 @@ function CustomersPage() {
 
         // Sum actual collections for this customer
         const collectionSum = cList.reduce((sum, entry) => sum + Number(entry.collected_amount || 0), 0);
-        
+
         // Paid amount is maximum of collection records sum or customer's recorded amount_already_collected
         const actualPaidAmount = Math.max(Number(c.amount_already_collected || 0), collectionSum);
-        
+
         const totalDue = Number(c.total_due || c.loan_amount || 0);
         const actualOutstanding = Math.max(0, totalDue - actualPaidAmount);
 
@@ -477,8 +480,8 @@ function CustomersPage() {
                     type="button"
                     onClick={() => handleToggleDraftDay(d.key)}
                     className={`py-2.5 px-3 text-xs font-bold rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${isSelected
-                        ? "bg-primary text-primary-foreground border-primary shadow-md scale-[1.03]"
-                        : "bg-background text-muted-foreground hover:text-foreground border-border hover:border-primary/40"
+                      ? "bg-primary text-primary-foreground border-primary shadow-md scale-[1.03]"
+                      : "bg-background text-muted-foreground hover:text-foreground border-border hover:border-primary/40"
                       }`}
                   >
                     <span className={`size-2 rounded-full ${isSelected ? "bg-primary-foreground" : "bg-muted-foreground/30"}`} />
@@ -508,8 +511,8 @@ function CustomersPage() {
                 type="button"
                 onClick={() => setSelectedDay("all")}
                 className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedDay === "all"
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-background text-muted-foreground hover:text-foreground border-border"
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-background text-muted-foreground hover:text-foreground border-border"
                   }`}
               >
                 All Configured Days ({configuredDays.length})
@@ -524,8 +527,8 @@ function CustomersPage() {
                     type="button"
                     onClick={() => setSelectedDay(dKey)}
                     className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${isSelected
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "bg-background text-muted-foreground hover:text-foreground border-border"
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-background text-muted-foreground hover:text-foreground border-border"
                       }`}
                   >
                     <CheckCircle2 className={`size-3.5 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
@@ -540,34 +543,43 @@ function CustomersPage() {
 
       {/* 2. Customer List Header & Action Bar */}
       <Card>
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code or phone…" className="pl-9" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code or phone…" className="pl-9 h-9 text-xs sm:text-sm" />
           </div>
 
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full sm:w-40">
-              <Filter className="size-4 mr-1" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="defaulted">Defaulted</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-36 h-9 text-xs sm:text-sm">
+                <Filter className="size-3.5 mr-1 text-muted-foreground" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="defaulted">Defaulted</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleExportCSV}>
-              <Download className="size-4" /> Export
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9 px-3 text-xs sm:text-sm">
+              <Download className="size-3.5 mr-1" /> Export
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBatchModalOpen(true)}
+              className="h-9 px-3 text-xs sm:text-sm bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-semibold dark:bg-emerald-950 dark:text-emerald-300"
+            >
+              <ImageIcon className="size-3.5 mr-1" /> Passbooks
             </Button>
 
             {/* Locked vs Unlocked Add Customer Button */}
             {!isDaysSaved ? (
-              <Button size="sm" variant="secondary" className="cursor-not-allowed opacity-75" disabled title="Save your collection days first to unlock adding customers.">
-                <Lock className="size-4 mr-1.5 text-amber-600" /> Save Days First
+              <Button size="sm" variant="secondary" className="h-9 px-3 text-xs sm:text-sm cursor-not-allowed opacity-75" disabled title="Save your collection days first to unlock adding customers.">
+                <Lock className="size-3.5 mr-1.5 text-amber-600" /> Save Days First
               </Button>
             ) : (
               <NewCustomerModal
@@ -652,7 +664,7 @@ function CustomersPage() {
                   paid={c.installments_paid_count || 0}
                 />
 
-                <div className="flex items-center justify-end gap-2 pt-1">
+                <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -806,6 +818,14 @@ function CustomersPage() {
           setOpen={(v) => !v && setViewingCustomer(null)}
         />
       )}
+
+      {/* Batch Passbooks Multi-Select Modal */}
+      <BatchPassbooksModal
+        open={isBatchModalOpen}
+        setOpen={setIsBatchModalOpen}
+        allCustomers={customers}
+        workspaceName={workspace?.name}
+      />
 
       {/* Edit Customer Modal */}
       {editingCustomer && (
@@ -1415,6 +1435,181 @@ function EditCustomerModal({
             </div>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BatchPassbooksModal({
+  open,
+  setOpen,
+  allCustomers,
+  workspaceName,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  allCustomers: Customer[];
+  workspaceName?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [dayFilter, setDayFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [generating, setGenerating] = useState(false);
+
+  const filtered = allCustomers.filter((c) => {
+    const matchesQuery =
+      c.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.customer_code?.toLowerCase().includes(search.toLowerCase()) ||
+      c.mobile_number?.includes(search);
+    const matchesDay = dayFilter === "all" || (c.collection_day || "").toLowerCase() === dayFilter.toLowerCase();
+    return matchesQuery && matchesDay;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((c) => c.public_id)));
+    }
+  };
+
+  const toggleCustomer = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleGenerate = async () => {
+    const selectedCustomers = allCustomers.filter((c) => selectedIds.has(c.public_id));
+    if (selectedCustomers.length === 0) return;
+
+    setGenerating(true);
+    try {
+      await generateBatchPassbookPages(selectedCustomers, workspaceName);
+      setOpen(false);
+    } catch (err) {
+      console.error("Failed to generate batch passbooks:", err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const selectedCount = selectedIds.size;
+  const pageCount = Math.ceil(selectedCount / 2);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ImageIcon className="size-5 text-emerald-600" /> Batch Customer Passbook Images (A4 Pages)
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Select customers to export. Each A4 page fits <span className="font-bold text-foreground">EXACTLY 2 Customer Passbooks</span>.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Filter Bar */}
+        <div className="flex items-center gap-2 pt-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search customer name, code or phone..."
+              className="pl-9 h-9 text-xs"
+            />
+          </div>
+          <Select value={dayFilter} onValueChange={setDayFilter}>
+            <SelectTrigger className="w-36 h-9 text-xs">
+              <SelectValue placeholder="Day" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Days</SelectItem>
+              <SelectItem value="monday">Monday</SelectItem>
+              <SelectItem value="tuesday">Tuesday</SelectItem>
+              <SelectItem value="wednesday">Wednesday</SelectItem>
+              <SelectItem value="thursday">Thursday</SelectItem>
+              <SelectItem value="friday">Friday</SelectItem>
+              <SelectItem value="saturday">Saturday</SelectItem>
+              <SelectItem value="sunday">Sunday</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Select All & Summary Header */}
+        <div className="flex items-center justify-between py-2 px-1 border-b border-border text-xs">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={filtered.length > 0 && selectedIds.size === filtered.length}
+              onCheckedChange={toggleSelectAll}
+              id="select-all"
+            />
+            <label htmlFor="select-all" className="font-semibold cursor-pointer">
+              Select All ({filtered.length})
+            </label>
+          </div>
+
+          <Badge variant="outline" className="font-mono text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200">
+            {selectedCount} Selected ({pageCount} A4 {pageCount === 1 ? "Page" : "Pages"})
+          </Badge>
+        </div>
+
+        {/* Customer Checkbox List */}
+        <div className="flex-1 max-h-72 overflow-y-auto space-y-1 py-2">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">No matching customers found.</p>
+          ) : (
+            filtered.map((c) => {
+              const isChecked = selectedIds.has(c.public_id);
+              return (
+                <div
+                  key={c.public_id}
+                  onClick={() => toggleCustomer(c.public_id)}
+                  className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${isChecked
+                    ? "bg-emerald-50/60 border-emerald-300 dark:bg-emerald-950/40"
+                    : "bg-card border-border/60 hover:bg-muted/40"
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Checkbox checked={isChecked} onCheckedChange={() => toggleCustomer(c.public_id)} />
+                    <div>
+                      <div className="font-bold flex items-center gap-1.5">
+                        <span>{c.full_name}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">({c.customer_code})</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                        <span>{c.mobile_number}</span>
+                        <span>·</span>
+                        <span className="capitalize">{c.collection_day || "monday"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right font-mono text-[11px]">
+                    <div className="font-bold text-foreground">{inr(c.loan_amount)}</div>
+                    <div className="text-emerald-600 font-semibold">{inr(c.outstanding_balance)} left</div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <DialogFooter className="pt-3 border-t border-border flex items-center justify-between sm:justify-between">
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={selectedCount === 0 || generating}
+            onClick={handleGenerate}
+            className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+          >
+            {generating ? "Generating A4 Pages..." : `Generate ${pageCount} A4 ${pageCount === 1 ? "Page" : "Pages"}`}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
