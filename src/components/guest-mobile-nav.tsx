@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/hooks/use-theme";
 import { useOnboarding } from "@/components/onboarding-tour";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 
 export function GuestMobileBottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -172,6 +173,13 @@ export function GuestMobileBottomNav() {
 
             {/* Quick Action Options */}
             <div className="space-y-2 pt-2 border-t border-border/60">
+              <PwaInstallButton
+                variant="outline"
+                className="w-full h-11 bg-emerald-50 text-emerald-700 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 justify-start px-3"
+                label="Install FinRoute PWA App"
+                showSubtext
+              />
+
               <button
                 type="button"
                 onClick={() => { toggle(); setIsMoreOpen(false); }}

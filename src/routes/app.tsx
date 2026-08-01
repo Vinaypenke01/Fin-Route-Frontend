@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from "@/hooks/use-theme";
 import { OnboardingTour, useOnboarding } from "@/components/onboarding-tour";
 import { InstallPrompt, InstallStatusBadge } from "@/components/install-prompt";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 import { UpgradeUpsellModal } from "@/components/upgrade-upsell-modal";
 
 import { GuestMobileBottomNav } from "@/components/guest-mobile-nav";
@@ -76,6 +77,12 @@ function AppLayout() {
             <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex" data-tour="header-upgrade">
               <Link to="/app/upgrade"><Sparkles className="size-4" /> Upgrade</Link>
             </Button>
+            <PwaInstallButton
+              variant="outline"
+              size="sm"
+              className="hidden sm:inline-flex bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300"
+              label="Install App"
+            />
             <Button asChild variant="ghost" size="icon" aria-label="Notifications">
               <Link to="/app/notifications"><Bell className="size-4" /></Link>
             </Button>

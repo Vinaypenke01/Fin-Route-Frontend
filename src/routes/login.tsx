@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { authService } from "@/lib/services/auth-service";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Log in — FinRoute" }, { name: "description", content: "Sign in to your FinRoute workspace." }] }),
@@ -100,7 +101,14 @@ function LoginPage() {
           <Button type="button" variant="outline">Microsoft</Button>
         </div> */}
 
-        <p className="text-center text-xs text-muted-foreground">
+        <PwaInstallButton
+          variant="outline"
+          className="w-full h-10 bg-emerald-50/80 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-bold dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+          label="Install FinRoute App on Mobile / PC"
+          showSubtext
+        />
+
+        <p className="text-center text-xs text-muted-foreground pt-1">
           Want to try without an account?{" "}
           <Link to="/register" className="font-medium text-primary hover:underline">Create Guest Workspace</Link>
         </p>
