@@ -4,9 +4,21 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Automatically overwrite legacy favicon.ico with official FinRoute logo
+try {
+  const officialLogo = path.resolve(__dirname, "./public/logo-removebg-preview (1).png");
+  const faviconIco = path.resolve(__dirname, "./public/favicon.ico");
+  if (fs.existsSync(officialLogo)) {
+    fs.copyFileSync(officialLogo, faviconIco);
+  }
+} catch (err) {
+  console.error("Favicon sync error:", err);
+}
 
 export default defineConfig({
   plugins: [
@@ -46,6 +58,7 @@ export default defineConfig({
       "tanstack-start-manifest:v": path.resolve(__dirname, "./src/lib/tanstack-manifest-stub.ts"),
     },
   },
+  appType: "spa",
   server: {
     port: 8080,
     host: true,

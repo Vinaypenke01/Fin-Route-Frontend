@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Search, Filter, Calendar, RefreshCw } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Expense } from "@/lib/services/guest-workspace-service";
@@ -285,14 +285,22 @@ function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen:
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+    if (!amount || Number(amount) <= 0) {
+      setError("Expense amount must be greater than ₹0.");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Please enter a description or note for this expense.");
+      return;
+    }
+    setSubmitting(true);
     try {
       await guestWorkspaceService.recordExpense({
         category: selectedCat,
         amount,
         expense_date: expenseDate,
-        description,
+        description: description.trim(),
       });
       setOpen(false);
       onSuccess();
@@ -313,6 +321,9 @@ function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen:
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Log Operational Expense</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Record fuel, agent tea/snacks, stationary, or workspace operational expenses.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {error && (

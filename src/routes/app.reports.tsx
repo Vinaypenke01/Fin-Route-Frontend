@@ -313,7 +313,16 @@ function ReportsPage() {
             <Printer className="size-4 mr-1.5" /> Print Statement
           </Button>
           <Button size="sm" onClick={() => handleExportCsv("summary")} className="bg-primary text-primary-foreground font-semibold">
-            <Download className="size-4 mr-1.5" /> Export Net Summary CSV
+            <Download className="size-4 mr-1.5" /> Export Summary CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => guestWorkspaceService.downloadFullDataBackup()}
+            className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-300 font-semibold dark:bg-blue-950 dark:text-blue-300"
+            title="Download complete JSON backup of all customers, loans, collections & expenses"
+          >
+            <Download className="size-4 mr-1.5" /> Full Data Backup (JSON)
           </Button>
           <Button
             size="sm"

@@ -152,6 +152,9 @@ function BroadcastModal({ open, setOpen }: { open: boolean; setOpen: (v: boolean
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Broadcast System Alert</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Send an administrative system-wide alert notification to all lenders.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {error && (

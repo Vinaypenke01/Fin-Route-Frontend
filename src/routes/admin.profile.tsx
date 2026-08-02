@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Monitor, Smartphone, Tablet, Laptop, MapPin, Trash2 } from "lucide-react";
+import { Monitor, Smartphone, Tablet, Laptop, MapPin, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { activeSessions, auditLogs } from "@/lib/admin-data";
+import { authService, UserProfile, AuditLogItem, UserSessionItem } from "@/lib/services/auth-service";
+import { ActivityLogSection } from "@/components/activity-log-section";
+import { DevicesSection } from "@/components/devices-section";
 
 export const Route = createFileRoute("/admin/profile")({
   head: () => ({ meta: [{ title: "Profile — Admin" }] }),
@@ -19,22 +23,165 @@ const deviceIcon = (d: string) =>
   /iphone|android|pixel/i.test(d) ? Smartphone : /ipad|tablet/i.test(d) ? Tablet : /mac|windows/i.test(d) ? Laptop : Monitor;
 
 function ProfilePage() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [activities, setActivities] = useState<AuditLogItem[]>([]);
+  const [sessions, setSessions] = useState<UserSessionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Form State
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+
+  // Password Form State
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passUpdating, setPassUpdating] = useState(false);
+
+  const loadProfile = async () => {
+    setLoading(true);
+    try {
+      const [data, logs, sessList] = await Promise.all([
+        authService.getMe(),
+        authService.getActivityLogs(),
+        authService.getSessions(),
+      ]);
+      setProfile(data);
+      setActivities(logs);
+      setSessions(sessList);
+      setFullName(data.full_name || "");
+      setEmail(data.email || "");
+      setCity(data.city || "");
+      setState(data.state || "");
+      setEmployeeId(data.employee_id || "");
+    } catch (err) {
+      console.error("Failed to load admin profile:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: number) => {
+    try {
+      await authService.revokeSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setMessage({ type: "success", text: "Device session revoked successfully." });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Failed to revoke session." });
+    }
+  };
+
+  const handleRevokeAll = async () => {
+    try {
+      await authService.revokeAllSessions();
+      setSessions([]);
+      setMessage({ type: "success", text: "Signed out of all active sessions." });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Failed to sign out of all sessions." });
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpdating(true);
+    setMessage(null);
+    try {
+      const updated = await authService.updateProfile({
+        full_name: fullName,
+        email: email || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        employee_id: employeeId || undefined,
+      });
+      setProfile(updated);
+      setMessage({ type: "success", text: "Admin profile updated successfully." });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Failed to update profile." });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "New password and confirmation do not match." });
+      return;
+    }
+    setPassUpdating(true);
+    setMessage(null);
+    try {
+      await authService.changePassword({
+        old_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      setMessage({ type: "success", text: "Password updated successfully." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Failed to update password." });
+    } finally {
+      setPassUpdating(false);
+    }
+  };
+
+  const initials = (fullName || profile?.full_name || "Admin")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+
+  const roleTitle = (profile?.account_type || "admin").toUpperCase();
+
   return (
     <div className="space-y-6">
+      {/* Header Profile Card */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-4 p-6">
-          <Avatar className="size-20"><AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">RM</AvatarFallback></Avatar>
+          <Avatar className="size-20">
+            <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="font-display text-2xl font-bold">Rahul Menon</h2>
-              <Badge variant="secondary">Super Admin</Badge>
+              <h2 className="font-display text-2xl font-bold">{fullName || profile?.full_name || "User Profile"}</h2>
+              <Badge variant="secondary">{roleTitle}</Badge>
             </div>
-            <div className="text-sm text-muted-foreground">admin@finroute.in · +91 98765 43210</div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="size-3" /> Bengaluru, Karnataka</div>
+            <div className="text-sm text-muted-foreground">
+              {email || "No email set"} · {profile?.mobile_number || "-"}
+            </div>
+            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="size-3" /> {city || state ? `${city}${city && state ? ", " : ""}${state}` : "Location not set"}
+            </div>
           </div>
-          <Button variant="outline">Edit profile</Button>
         </CardContent>
       </Card>
+
+      {message && (
+        <div
+          className={`p-3.5 rounded-lg border text-xs font-semibold flex items-center gap-2 ${
+            message.type === "success"
+              ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-destructive/10 text-destructive border-destructive/20"
+          }`}
+        >
+          {message.type === "success" ? <CheckCircle2 className="size-4 shrink-0" /> : <AlertCircle className="size-4 shrink-0" />}
+          <span>{message.text}</span>
+        </div>
+      )}
 
       <Tabs defaultValue="info">
         <TabsList className="flex-wrap">
@@ -48,27 +195,83 @@ function ProfilePage() {
         </TabsList>
 
         <TabsContent value="info">
-          <Card><CardContent className="grid gap-4 p-6 md:grid-cols-2">
-            <F label="Full name" defaultValue="Rahul Menon" />
-            <F label="Email" defaultValue="admin@finroute.in" />
-            <div className="space-y-2"><Label>Phone</Label><PhoneInput defaultValue="9876543210" /></div>
-            <F label="Role" defaultValue="Super Admin" />
-            <F label="Employee ID" defaultValue="FR-ADMIN-001" />
-            <F label="Joined" defaultValue="12 Jan 2023" />
-          </CardContent></Card>
+          <Card>
+            <form onSubmit={handleUpdateProfile}>
+              <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Full name</Label>
+                  <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Enter full name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter email address" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile Number</Label>
+                  <PhoneInput value={profile?.mobile_number?.replace(/^\+91/, "") || ""} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Input value={roleTitle} disabled className="bg-muted font-semibold" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Employee ID</Label>
+                  <Input value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder="Enter employee ID" />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Enter city" />
+                </div>
+                <div className="space-y-2">
+                  <Label>State</Label>
+                  <Input value={state} onChange={(e) => setState(e.target.value)} placeholder="Enter state" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Joined Date</Label>
+                  <Input value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-IN") : "-"} disabled className="bg-muted" />
+                </div>
+                <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+                  <Button type="submit" disabled={updating} className="font-bold">
+                    {updating ? "Saving..." : "Save Profile Changes"}
+                  </Button>
+                </div>
+              </CardContent>
+            </form>
+          </Card>
         </TabsContent>
 
         <TabsContent value="password">
-          <Card><CardContent className="grid gap-4 p-6 md:grid-cols-3">
-            <div className="space-y-2"><Label>Current password</Label><PasswordInput placeholder="••••••••" /></div>
-            <div className="space-y-2"><Label>New password</Label><PasswordInput placeholder="••••••••" /></div>
-            <div className="space-y-2"><Label>Confirm new password</Label><PasswordInput placeholder="••••••••" /></div>
-            <div className="md:col-span-3"><Button>Update password</Button></div>
-          </CardContent></Card>
+          <Card>
+            <form onSubmit={handleUpdatePassword}>
+              <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Current password</Label>
+                  <PasswordInput value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" required />
+                </div>
+                <div className="space-y-2">
+                  <Label>New password</Label>
+                  <PasswordInput value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirm new password</Label>
+                  <PasswordInput value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" required />
+                </div>
+                <div className="md:col-span-3 flex justify-end">
+                  <Button type="submit" disabled={passUpdating} className="font-bold">
+                    {passUpdating ? "Updating..." : "Update Password"}
+                  </Button>
+                </div>
+              </CardContent>
+            </form>
+          </Card>
         </TabsContent>
 
         <TabsContent value="2fa">
-          <Card><CardHeader><CardTitle>Two-Factor Authentication</CardTitle><CardDescription>Add an extra layer of security to your account.</CardDescription></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>Two-Factor Authentication</CardTitle>
+              <CardDescription>Add an extra layer of security to your account.</CardDescription>
+            </CardHeader>
             <CardContent className="space-y-3">
               <Row label="Authenticator App" enabled />
               <Row label="SMS OTP" />
@@ -79,74 +282,39 @@ function ProfilePage() {
         </TabsContent>
 
         <TabsContent value="activity">
-          <Card><CardContent className="space-y-3 p-4">
-            {auditLogs.filter((l) => l.user === "admin@finroute.in").slice(0, 12).map((l) => (
-              <div key={l.id} className="flex items-center justify-between rounded-md border border-border p-3">
-                <div>
-                  <div className="font-mono text-sm">{l.action}</div>
-                  <div className="text-xs text-muted-foreground">{l.module} · {l.ip} · {l.browser}</div>
-                </div>
-                <span className="text-xs text-muted-foreground">{l.when}</span>
-              </div>
-            ))}
-          </CardContent></Card>
+          <ActivityLogSection />
         </TabsContent>
 
         <TabsContent value="sessions">
-          <Card><CardContent className="space-y-3 p-4">
-            {activeSessions.map((s) => {
-              const Icon = deviceIcon(s.device);
-              return (
-                <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
-                  <span className="grid size-10 place-items-center rounded-md bg-muted"><Icon className="size-5" /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 font-medium">{s.device} {s.active && <Badge variant="secondary">This device</Badge>}</div>
-                    <div className="text-xs text-muted-foreground">{s.browser} · {s.location} · {s.ip}</div>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{s.lastSeen}</span>
-                  {!s.active && <Button variant="ghost" size="icon" aria-label="Revoke"><Trash2 className="size-4 text-destructive" /></Button>}
-                </div>
-              );
-            })}
-            <Button variant="outline" size="sm">Sign out of all sessions</Button>
-          </CardContent></Card>
+          <DevicesSection mode="sessions" />
         </TabsContent>
 
         <TabsContent value="devices">
-          <Card><CardContent className="space-y-3 p-4">
-            {activeSessions.slice(0, 5).map((s) => {
-              const Icon = deviceIcon(s.device);
-              return (
-                <div key={s.id} className="flex items-center gap-3 rounded-md border border-border p-3">
-                  <Icon className="size-5 text-muted-foreground" />
-                  <div className="flex-1"><div className="font-medium">{s.device}</div><div className="text-xs text-muted-foreground">Last used {s.lastSeen}</div></div>
-                  <Badge variant="outline">Trusted</Badge>
-                </div>
-              );
-            })}
-          </CardContent></Card>
+          <DevicesSection mode="devices" />
         </TabsContent>
 
         <TabsContent value="preferences">
-          <Card><CardContent className="space-y-3 p-4">
-            <Row label="Digest emails" enabled subtitle="Weekly product & security digest" />
-            <Row label="Beta features" subtitle="Try experimental modules before release" />
-            <Row label="Sound effects" enabled />
-            <Row label="Show tooltips on hover" enabled />
-          </CardContent></Card>
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <Row label="Digest emails" enabled subtitle="Weekly product & security digest" />
+              <Row label="Beta features" subtitle="Try experimental modules before release" />
+              <Row label="Sound effects" enabled />
+              <Row label="Show tooltips on hover" enabled />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function F({ label, defaultValue, type = "text" }: { label: string; defaultValue?: string; type?: string }) {
-  return <div className="space-y-2"><Label>{label}</Label><Input type={type} defaultValue={defaultValue} /></div>;
-}
 function Row({ label, enabled, subtitle }: { label: string; enabled?: boolean; subtitle?: string }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3">
-      <div><div className="font-medium">{label}</div>{subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}</div>
+      <div>
+        <div className="font-medium">{label}</div>
+        {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+      </div>
       <Switch defaultChecked={enabled} />
     </div>
   );

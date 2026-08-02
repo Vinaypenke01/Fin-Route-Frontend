@@ -56,7 +56,18 @@ export interface PhoneInputProps extends React.ComponentProps<"input"> {
 }
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ className, prefix = "+91", ...props }, ref) => {
+  ({ className, prefix = "+91", onChange, ...props }, ref) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      let val = e.target.value.replace(/\D/g, "");
+      if (val.length > 10) {
+        val = val.slice(0, 10);
+      }
+      e.target.value = val;
+      if (onChange) {
+        onChange(e);
+      }
+    };
+
     return (
       <div className="relative flex items-center w-full">
         <div className="absolute left-3 font-mono text-xs font-semibold text-muted-foreground select-none pointer-events-none border-r border-border pr-2">
@@ -64,6 +75,8 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
         </div>
         <input
           type="tel"
+          maxLength={10}
+          onChange={handleChange}
           className={cn(
             "flex h-9 w-full rounded-md border border-input bg-transparent pl-14 pr-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm font-mono",
             className,

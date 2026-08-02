@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sparkles } from "lucide-react";
 import { authService } from "@/lib/services/auth-service";
-import { isValidIndianMobile } from "@/lib/utils";
+import { validatePassword, validateMobileNumber } from "@/lib/auth-validation";
+import { PasswordStrengthChecker } from "@/components/password-strength-checker";
 
 export const Route = createFileRoute("/register")({
   head: () => ({ meta: [{ title: "Create your workspace — FinRoute" }, { name: "description", content: "Get your free digital collection book in 2 minutes." }] }),
@@ -22,19 +23,24 @@ function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreed) {
-      setError("You must agree to the Terms of Service to continue.");
+      setError("Please check and agree to the Terms of Service and Privacy Policy to continue.");
       return;
     }
-    const cleanMobile = mobileNumber.replace(/^\+91/, "").trim();
-    if (!isValidIndianMobile(cleanMobile)) {
-      setError("Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.");
+    const mobileVal = validateMobileNumber(mobileNumber);
+    if (!mobileVal.isValid) {
+      setError(mobileVal.error || "Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.");
+      return;
+    }
+    const passVal = validatePassword(password);
+    if (!passVal.isValid) {
+      setError(`Password must include: ${passVal.errors.join(", ")}.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -45,7 +51,7 @@ function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const fullMobile = `+91${cleanMobile}`;
+    const fullMobile = `+91${mobileVal.cleaned}`;
     try {
       await authService.register({
         full_name: fullName,
@@ -143,6 +149,9 @@ function RegisterPage() {
                 />
               </div>
             </div>
+
+            {/* Real-time Password Security Criteria Checklist */}
+            <PasswordStrengthChecker password={password} />
 
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox

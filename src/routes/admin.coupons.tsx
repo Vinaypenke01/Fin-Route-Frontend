@@ -162,6 +162,9 @@ function AddCouponModal({ open, setOpen, onSuccess }: { open: boolean; setOpen: 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create Promotional Coupon</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Create a discount coupon code for guest workspace subscription plans.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {error && (

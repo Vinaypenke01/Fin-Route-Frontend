@@ -976,15 +976,62 @@ function NewCustomerModal({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
 
-    const fullMobile = mobileNumber.startsWith("+91") ? mobileNumber : `+91${mobileNumber.replace(/^\+91/, "").trim()}`;
+    // 1. Borrower Name Validation
+    const trimmedName = fullName.trim();
+    if (!trimmedName || trimmedName.length < 3) {
+      setError("Please enter borrower's full name (minimum 3 characters).");
+      return;
+    }
+
+    // 2. Mobile Number Validation (Indian 10-digit format starting with 6-9)
+    const cleanMobile = mobileNumber.replace(/\D/g, "").replace(/^91/, "");
+    const mobileRegex = /^[6-9]\d{9}$/;
+    if (!mobileRegex.test(cleanMobile)) {
+      setError("Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9 (e.g. 9876543210).");
+      return;
+    }
+
+    // 3. Principal & Disbursed Loan Validation
+    if (!loanAmount || loanAmount <= 0) {
+      setError("Principal loan amount must be greater than ₹0.");
+      return;
+    }
+    if (disbursedAmount < 0) {
+      setError("Disbursed amount cannot be negative.");
+      return;
+    }
+    if (interestRate < 0) {
+      setError("Interest rate cannot be negative.");
+      return;
+    }
+
+    // 4. Installments & Frequency Validation
+    if (!selectedFreq) {
+      setError("Please select a collection frequency.");
+      return;
+    }
+    if (!selectedInterestType) {
+      setError("Please select an interest calculation type.");
+      return;
+    }
+    if (!isExistingBorrower && (!totalInstallmentsInput || totalInstallmentsInput < 1)) {
+      setError("Total installments must be at least 1.");
+      return;
+    }
+    if (isExistingBorrower && remainingInstallmentsCount < 1) {
+      setError("Remaining installments count must be at least 1.");
+      return;
+    }
+
+    setSubmitting(true);
+    const fullMobile = `+91${cleanMobile}`;
 
     try {
       await guestWorkspaceService.createCustomer({
         sequence_number: sequenceNumber !== "" ? Number(sequenceNumber) : null,
-        full_name: fullName,
+        full_name: trimmedName,
         mobile_number: fullMobile,
         loan_amount: loanAmount,
         disbursed_amount: disbursedAmount,
@@ -1025,6 +1072,9 @@ function NewCustomerModal({
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="size-5 text-primary" /> Register Borrower & Issue Loan
           </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Enter borrower details and loan parameters to register a new customer in your workspace.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleCreate} className="space-y-4 pt-2">
@@ -1075,7 +1125,14 @@ function NewCustomerModal({
             </div>
             <div>
               <label className="text-xs font-medium">Mobile Number *</label>
-              <PhoneInput className="mt-1" value={mobileNumber.replace(/^\+91/, "")} onChange={(e) => setMobileNumber(e.target.value)} required placeholder="9876543210" />
+              <PhoneInput
+                className="mt-1"
+                value={mobileNumber.replace(/^\+91/, "")}
+                onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                required
+                placeholder="9876543210"
+                maxLength={10}
+              />
             </div>
           </div>
 

@@ -133,6 +133,10 @@ function NewCollectionPage() {
       setError("Please select a borrower.");
       return;
     }
+    if (!isSkippedSelected && (collectedAmount === undefined || collectedAmount === null || Number(collectedAmount) <= 0)) {
+      setError("Collected amount must be greater than ₹0 when recording a collection payment.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 

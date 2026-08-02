@@ -10,6 +10,9 @@ export interface WorkspaceData {
   business_category: number | null;
   business_category_name: string | null;
   mobile_number: string;
+  gstin?: string | null;
+  business_type?: string | null;
+  owner_pan?: string | null;
   logo: string | null;
   address: string;
   city: string;
@@ -301,6 +304,17 @@ export const guestWorkspaceService = {
     return res.data;
   },
 
+  /**
+   * Update workspace details (name, gstin, business_type, owner_pan, address, city, state, pin_code).
+   */
+  async updateWorkspace(data: Partial<WorkspaceData>): Promise<WorkspaceData> {
+    const res = await apiRequest<WorkspaceData>("/app/workspace/", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  },
+
   // ─── Upgrade & Plans ───────────────────────────────────────────────────────
   async getUpgradePlans(): Promise<UpgradePlansResponse> {
     const res = await apiRequest<UpgradePlansResponse>("/app/upgrade/plans/");
@@ -328,10 +342,33 @@ export const guestWorkspaceService = {
     return res.data;
   },
 
-  // ─── Reports Export ────────────────────────────────────────────────────────
+  // ─── Reports & Data Backup ──────────────────────────────────────────────────
   getReportExportUrl(type: string, format: string = "csv", params?: any): string {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
     const query = new URLSearchParams({ type, format, ...params }).toString();
     return `${API_BASE_URL}/app/reports/export/?${query}`;
+  },
+
+  /**
+   * Download complete JSON backup of all workspace records.
+   */
+  async downloadFullDataBackup(): Promise<void> {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+    const token = localStorage.getItem("finroute_access_token");
+    const res = await fetch(`${API_BASE_URL}/app/backup/download/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) throw new Error("Failed to download workspace data backup.");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `finroute_workspace_backup_${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
