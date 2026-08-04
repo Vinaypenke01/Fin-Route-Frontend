@@ -13,6 +13,8 @@ import {
 import { Bell, Search, User, Settings, LogOut, Sun, Moon, ShieldCheck } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/hooks/use-auth";
+import { BrandLoader } from "@/components/ui/brand-loader";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
   BreadcrumbPage, BreadcrumbSeparator,
@@ -51,7 +53,18 @@ const crumbMap: Record<string, string> = {
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { theme, toggle } = useTheme();
+  const { user, logout } = useAuth();
   const segments = pathname.split("/").filter(Boolean);
+
+  const displayName = user?.full_name || "Super Admin";
+  const displayEmail = user?.email || user?.mobile_number || "admin@finroute.in";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase() || "SA";
 
   return (
     <SidebarProvider>
@@ -80,19 +93,25 @@ function AdminLayout() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button aria-label="Account" className="rounded-full outline-none focus:ring-2 focus:ring-ring">
-                  <Avatar className="size-9"><AvatarFallback className="bg-primary text-primary-foreground text-sm">SA</AvatarFallback></Avatar>
+                  <Avatar className="size-9">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
-                  <div className="text-sm font-medium">Super Admin</div>
-                  <div className="text-xs text-muted-foreground">admin@finroute.in</div>
+                  <div className="text-sm font-semibold truncate">{displayName}</div>
+                  <div className="text-xs text-muted-foreground truncate">{displayEmail}</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link to="/admin/profile"><User className="mr-2 size-4" /> Profile</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link to="/admin/settings"><Settings className="mr-2 size-4" /> Settings</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link to="/login"><LogOut className="mr-2 size-4" /> Log out</Link></DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+                  <LogOut className="mr-2 size-4" /> Log out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </header>

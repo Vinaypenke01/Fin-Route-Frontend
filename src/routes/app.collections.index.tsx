@@ -9,10 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
+import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
+import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loaders";
 
 export const Route = createFileRoute("/app/collections/")({
   head: () => ({ meta: [{ title: "Collections — FinRoute" }, { name: "description", content: "Digital collection register and route customer schedule." }] }),
@@ -38,41 +41,135 @@ const getTodayStr = () => {
 };
 const today = getTodayStr();
 
-function InstallmentPassbookGrid({ total = 20, paid = 0 }: { total?: number; paid?: number }) {
-  const safeTotal = Math.min(Math.max(total || 1, 1), 100);
+export const formatFilterDate = (dStr: string) => {
+  if (!dStr) return "All";
+  if (dStr === today) return "Today";
+  try {
+    const [y, m, d] = dStr.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+  } catch {
+    return dStr;
+  }
+};
+
+export function buildHistoryStatuses(collections?: Collection[]): ("paid" | "skipped")[] {
+  if (!collections || collections.length === 0) return [];
+  const sorted = [...collections].sort((a, b) => {
+    if (a.collection_date !== b.collection_date) {
+      return a.collection_date.localeCompare(b.collection_date);
+    }
+    return String(a.receipt_number || a.public_id).localeCompare(String(b.receipt_number || b.public_id));
+  });
+
+  return sorted.map((c) => {
+    const isSkipped =
+      c.status_code === "skipped" ||
+      (c.status_name && c.status_name.toLowerCase().includes("skipped")) ||
+      Number(c.collected_amount || 0) === 0;
+    return isSkipped ? "skipped" : "paid";
+  });
+}
+
+function InstallmentPassbookGrid({
+  total = 20,
+  paid = 0,
+  skipped = 0,
+  outstanding = 0,
+  onExtend,
+  historyStatuses,
+}: {
+  total?: number;
+  paid?: number;
+  skipped?: number;
+  outstanding?: number;
+  onExtend?: () => void;
+  historyStatuses?: ("paid" | "skipped")[];
+}) {
+  const safeTotal = Math.min(Math.max(total || 1, 1), 300);
   const safePaid = Math.min(paid || 0, safeTotal);
-  const remaining = safeTotal - safePaid;
+  const remaining = Math.max(0, safeTotal - safePaid);
+  const hasSkipped = skipped > 0;
+  const isCompletedWithBalance = safePaid >= safeTotal && outstanding > 0;
 
   return (
     <div className="space-y-1.5 pt-1">
-      <div className="flex items-center justify-between text-[11px] font-medium">
-        <span className="text-muted-foreground font-semibold">
-          Progress: <span className="text-emerald-700 font-bold">{safePaid} Paid</span> / <span className="text-foreground">{safeTotal} Total</span>
+      <div className="flex flex-wrap items-center justify-between text-[11px] font-medium gap-1">
+        <span className="text-muted-foreground font-semibold flex items-center gap-1">
+          Progress:
+          <span className={hasSkipped ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30" : "text-emerald-700 dark:text-emerald-400 font-bold"}>
+            {safePaid} Paid {hasSkipped ? `(${skipped} Skipped)` : ""}
+          </span> / <span className="text-foreground">{safeTotal} Total</span>
         </span>
-        <Badge variant="outline" className="font-mono text-[10px]">
-          {remaining} Remaining
-        </Badge>
+
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
+            {remaining} Remaining
+          </Badge>
+
+          {isCompletedWithBalance && onExtend && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onExtend}
+              className="h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 font-bold gap-0.5"
+              title="Schedule installments completed but balance pending. Click to extend tenure."
+            >
+              <Calendar className="size-3 text-amber-600" /> + Extend
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-1.5 bg-muted/40 rounded-lg border border-border/60">
         {Array.from({ length: safeTotal }, (_, i) => {
           const num = i + 1;
-          const isPaid = num <= safePaid;
+          let isPaid = false;
+          let isSkipped = false;
+
+          if (historyStatuses && historyStatuses[i]) {
+            isPaid = historyStatuses[i] === "paid";
+            isSkipped = historyStatuses[i] === "skipped";
+          } else {
+            isPaid = num <= safePaid;
+            const safeSkipped = Math.min(skipped || 0, Math.max(0, safeTotal - safePaid));
+            isSkipped = !isPaid && num <= safePaid + safeSkipped;
+          }
+
           return (
             <div
               key={num}
-              title={isPaid ? `Installment #${num}: PAID` : `Installment #${num}: Pending`}
-              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${
+              title={
                 isPaid
-                  ? "bg-emerald-600 text-white border-emerald-700 opacity-85"
-                  : "bg-background text-muted-foreground border-border/80"
-              }`}
+                  ? `Installment #${num}: PAID (Struck)`
+                  : isSkipped
+                    ? `Installment #${num}: SKIPPED (Struck Red)`
+                    : `Installment #${num}: Pending`
+              }
+              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${isPaid
+                  ? "bg-emerald-600 text-white border-emerald-700 opacity-90 shadow-xs"
+                  : isSkipped
+                    ? "bg-rose-600 text-white border-rose-700 font-extrabold shadow-xs"
+                    : "bg-background text-muted-foreground border-border/80"
+                }`}
             >
-              {isPaid ? <s>{num}</s> : num}
+              {isPaid || isSkipped ? <s>{num}</s> : num}
             </div>
           );
         })}
       </div>
+
+      {isCompletedWithBalance && (
+        <div className="flex items-center justify-between p-1.5 bg-amber-500/10 rounded-md border border-amber-500/30 text-[11px] text-amber-900 dark:text-amber-300 font-medium">
+          <span>Installments completed, but {inr(outstanding)} remains due.</span>
+          {onExtend && (
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px] text-amber-800 dark:text-amber-200 font-bold underline" onClick={onExtend}>
+              Increase Installments
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -95,6 +192,7 @@ function CollectionsPage() {
 
   const [markingPaidCustomer, setMarkingPaidCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [extendingCustomer, setExtendingCustomer] = useState<Customer | null>(null);
 
   const isSelectedDateToday = selectedDate === today;
 
@@ -145,18 +243,6 @@ function CollectionsPage() {
     setDateTo(today);
     setSelectedDate(today);
     setQ("");
-  };
-
-  const formatFilterDate = (dStr: string) => {
-    if (!dStr) return "All";
-    if (dStr === today) return "Today";
-    try {
-      const [y, m, d] = dStr.split("-");
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
-    } catch {
-      return dStr;
-    }
   };
 
   const formatDateRangeLabel = () => {
@@ -248,6 +334,31 @@ function CollectionsPage() {
     return { paidOnSelectedDateSet: paid, skippedOnSelectedDateSet: skipped };
   }, [collections, dateFrom, dateTo]);
 
+  const customerHistoryMap = useMemo(() => {
+    const map: Record<string, ("paid" | "skipped")[]> = {};
+    const customerCollectionsMap: Record<string, Collection[]> = {};
+
+    collections.forEach((col) => {
+      const pId = col.customer_public_id ? String(col.customer_public_id).toLowerCase() : "";
+      const cCode = col.customer_code ? String(col.customer_code).toLowerCase() : "";
+
+      if (pId) {
+        if (!customerCollectionsMap[pId]) customerCollectionsMap[pId] = [];
+        customerCollectionsMap[pId].push(col);
+      }
+      if (cCode) {
+        if (!customerCollectionsMap[cCode]) customerCollectionsMap[cCode] = [];
+        customerCollectionsMap[cCode].push(col);
+      }
+    });
+
+    Object.entries(customerCollectionsMap).forEach(([key, cols]) => {
+      map[key] = buildHistoryStatuses(cols);
+    });
+
+    return map;
+  }, [collections]);
+
   // Total Expected
   const totalExpected = useMemo(() => {
     return routeCustomers.reduce((s, c) => s + Number(c.installment_amount || c.loan_amount || 0), 0);
@@ -330,8 +441,8 @@ function CollectionsPage() {
                 {isSingleDayPlan
                   ? `Your workspace is configured for 1 collection day (${configuredDays[0]?.toUpperCase()}). Displaying customer list for ${configuredDays[0]?.toUpperCase()}.`
                   : configuredDays.length > 1
-                  ? "Select a day below to view that day's active customers list and record collections."
-                  : "Please configure your collection days on the Customers page first."}
+                    ? "Select a day below to view that day's active customers list and record collections."
+                    : "Please configure your collection days on the Customers page first."}
               </p>
             </div>
           </div>
@@ -355,11 +466,10 @@ function CollectionsPage() {
             <button
               type="button"
               onClick={() => setSelectedDay("all")}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all ${
-                selectedDay === "all"
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedDay === "all"
                   ? "bg-primary text-primary-foreground border-primary shadow-sm"
                   : "bg-background text-muted-foreground hover:text-foreground border-border"
-              }`}
+                }`}
             >
               All Configured Days ({configuredDays.length})
             </button>
@@ -371,11 +481,10 @@ function CollectionsPage() {
                   key={dKey}
                   type="button"
                   onClick={() => setSelectedDay(dKey)}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${
-                    isSelected
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${isSelected
                       ? "bg-primary text-primary-foreground border-primary shadow-sm"
                       : "bg-background text-muted-foreground hover:text-foreground border-border"
-                  }`}
+                    }`}
                 >
                   <CheckCircle2 className={`size-3.5 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
                   {dayObj?.label || dKey}
@@ -554,13 +663,12 @@ function CollectionsPage() {
               return (
                 <div
                   key={c.public_id}
-                  className={`p-3.5 rounded-xl border bg-card shadow-sm space-y-3 transition-all ${
-                    isPaidOnDate
+                  className={`p-3.5 rounded-xl border bg-card shadow-sm space-y-3 transition-all ${isPaidOnDate
                       ? "border-emerald-500/40 bg-emerald-500/5 opacity-80"
                       : isSkippedOnDate
-                      ? "border-amber-500/40 bg-amber-500/5"
-                      : "border-border"
-                  }`}
+                        ? "border-amber-500/40 bg-amber-500/5"
+                        : "border-border"
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2 border-b border-border/40 pb-2">
                     <div>
@@ -590,7 +698,11 @@ function CollectionsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground font-medium">Disbursed Date:</span>
+                      <p className="font-medium font-mono text-foreground">{c.start_date ? formatFilterDate(c.start_date) : "-"}</p>
+                    </div>
                     <div>
                       <span className="text-[10px] text-muted-foreground font-medium">Installment Due:</span>
                       <p className="font-semibold font-mono text-emerald-700">{inr(c.installment_amount || c.loan_amount || 0)}</p>
@@ -604,6 +716,10 @@ function CollectionsPage() {
                   <InstallmentPassbookGrid
                     total={c.total_installments || 20}
                     paid={c.installments_paid_count || 0}
+                    skipped={c.skipped_installments_count || 0}
+                    outstanding={c.outstanding_balance}
+                    onExtend={() => setExtendingCustomer(c)}
+                    historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
                   />
 
                   <div className="flex items-center justify-end gap-2 pt-1">
@@ -644,6 +760,7 @@ function CollectionsPage() {
               <TableRow className="bg-muted/30">
                 <TableHead>Customer Code & Name</TableHead>
                 <TableHead>Mobile Number</TableHead>
+                <TableHead>Disbursed Date</TableHead>
                 <TableHead>Collection Day</TableHead>
                 <TableHead>Per Installment (₹)</TableHead>
                 <TableHead>Outstanding Balance</TableHead>
@@ -655,13 +772,13 @@ function CollectionsPage() {
             <TableBody>
               {loadingCustomers ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-6 text-xs text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
                     Loading route customers...
                   </TableCell>
                 </TableRow>
               ) : filteredCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-6 text-xs text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
                     No active borrowers assigned to {selectedDay === "all" ? "any day" : selectedDay}.
                   </TableCell>
                 </TableRow>
@@ -691,6 +808,9 @@ function CollectionsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{c.mobile_number}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                        {c.start_date ? formatFilterDate(c.start_date) : "-"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary border-primary/20">
                           {c.collection_day || "monday"}
@@ -706,6 +826,10 @@ function CollectionsPage() {
                         <InstallmentPassbookGrid
                           total={c.total_installments || 20}
                           paid={c.installments_paid_count || 0}
+                          skipped={c.skipped_installments_count || 0}
+                          outstanding={c.outstanding_balance}
+                          onExtend={() => setExtendingCustomer(c)}
+                          historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
                         />
                       </TableCell>
                       <TableCell>
@@ -812,7 +936,8 @@ function CollectionsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Receipt No</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Collection Date</TableHead>
+                <TableHead>Disbursed Date</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Expected Amount</TableHead>
                 <TableHead>Collected Amount</TableHead>
@@ -823,14 +948,10 @@ function CollectionsPage() {
             </TableHeader>
             <TableBody>
               {loadingCollections ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">
-                    Loading collections from database...
-                  </TableCell>
-                </TableRow>
+                <TableSkeletonRows rows={4} columns={9} />
               ) : filteredCollections.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-xs text-muted-foreground">
                     No collection entries yet. Click "New Entry" or "Mark as Paid" to record a collection.
                   </TableCell>
                 </TableRow>
@@ -839,6 +960,9 @@ function CollectionsPage() {
                   <TableRow key={c.public_id}>
                     <TableCell className="font-mono text-xs font-semibold">{c.receipt_number}</TableCell>
                     <TableCell className="text-xs">{c.collection_date}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      {c.disbursed_date ? formatFilterDate(c.disbursed_date) : c.customer_start_date ? formatFilterDate(c.customer_start_date) : "-"}
+                    </TableCell>
                     <TableCell className="font-medium">{c.customer_name} ({c.customer_code})</TableCell>
                     <TableCell>{inr(c.expected_amount)}</TableCell>
                     <TableCell className="font-bold text-emerald-600">{inr(c.collected_amount)}</TableCell>
@@ -856,6 +980,24 @@ function CollectionsPage() {
           </Table>
         </div>
       </Card>
+
+      {/* Extend Installments Dialog */}
+      {extendingCustomer && (
+        <ExtendInstallmentsDialog
+          open={Boolean(extendingCustomer)}
+          onOpenChange={(v) => !v && setExtendingCustomer(null)}
+          customerPublicId={extendingCustomer.public_id}
+          customerName={extendingCustomer.full_name}
+          currentTotalInstallments={extendingCustomer.total_installments || 20}
+          installmentsPaidCount={extendingCustomer.installments_paid_count || 0}
+          outstandingBalance={extendingCustomer.outstanding_balance}
+          installmentAmount={extendingCustomer.installment_amount}
+          onSuccess={() => {
+            loadCollections();
+            loadRouteCustomers();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -966,8 +1108,9 @@ function MarkAsPaidModal({
                 Day: {customer.collection_day || "monday"}
               </Badge>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-0.5 gap-x-2">
               <span>Mobile: <span className="font-mono text-foreground">{customer.mobile_number}</span></span>
+              <span>Disbursed: <span className="font-mono text-foreground font-semibold">{customer.start_date ? formatFilterDate(customer.start_date) : "-"}</span></span>
               <span>Outstanding: <span className="font-mono font-bold text-primary">{inr(customer.outstanding_balance || 0)}</span></span>
             </div>
           </div>
@@ -1105,29 +1248,43 @@ function ViewCustomerHistoryModal({
   allCollections,
   open,
   setOpen,
+  onRefresh,
 }: {
   customer: Customer;
   allCollections: Collection[];
   open: boolean;
   setOpen: (v: boolean) => void;
+  onRefresh?: () => void;
 }) {
   const [detail, setDetail] = useState<Customer>(customer);
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [draftDates, setDraftDates] = useState<Record<string, string>>({});
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [savingDates, setSavingDates] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const loadFreshDetail = async () => {
+    if (!customer) return;
+    setLoading(true);
+    try {
+      const fresh = await guestWorkspaceService.getCustomerDetail(customer.public_id);
+      if (fresh) setDetail(fresh);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error("Failed to load fresh customer detail:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadFreshDetail() {
-      if (!open || !customer) return;
-      setLoading(true);
-      try {
-        const fresh = await guestWorkspaceService.getCustomerDetail(customer.public_id);
-        if (fresh) setDetail(fresh);
-      } catch (err) {
-        console.error("Failed to load fresh customer detail:", err);
-      } finally {
-        setLoading(false);
-      }
+    if (open) {
+      loadFreshDetail();
+      setIsEditMode(false);
+      setDraftDates({});
+      setSaveMsg(null);
     }
-    loadFreshDetail();
   }, [open, customer]);
 
   const history = useMemo(() => {
@@ -1144,112 +1301,278 @@ function ViewCustomerHistoryModal({
   const activeCustomer = detail || customer;
   const totalCollected = history.reduce((s, h) => s + Number(h.collected_amount || 0), 0);
 
+  // Filter modified records
+  const modifiedRecords = useMemo(() => {
+    return history.filter((h) => {
+      const isAlreadyEdited = h.is_edited || (h.edit_count && h.edit_count >= 1);
+      if (isAlreadyEdited) return false;
+      const draft = draftDates[h.public_id];
+      return draft && draft !== h.collection_date;
+    });
+  }, [history, draftDates]);
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setDraftDates({});
+  };
+
+  const handleConfirmSaveDates = async () => {
+    if (modifiedRecords.length === 0) return;
+    setSavingDates(true);
+    setSaveMsg(null);
+    try {
+      await Promise.all(
+        modifiedRecords.map((h) =>
+          guestWorkspaceService.updateCollection(h.public_id, {
+            collection_date: draftDates[h.public_id],
+          })
+        )
+      );
+      setSaveMsg(`Successfully updated ${modifiedRecords.length} record(s). Audit log generated!`);
+      setShowConfirmModal(false);
+      setIsEditMode(false);
+      setDraftDates({});
+      loadFreshDetail();
+    } catch (err: any) {
+      setSaveMsg(err.message || "Failed to update collection dates.");
+    } finally {
+      setSavingDates(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Eye className="size-5 text-primary" /> Borrower Profile & Payment Details
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Complete account summary and collection history for <span className="font-semibold text-foreground">{activeCustomer.full_name}</span>.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="size-5 text-primary" /> Borrower Profile & Payment Details
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Complete account summary and collection history for <span className="font-semibold text-foreground">{activeCustomer.full_name}</span>.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 pt-2">
-          {/* Header Card */}
-          <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-2 text-xs">
-            <div className="flex items-center justify-between font-semibold">
-              <div className="flex items-center gap-1.5">
-                {activeCustomer.sequence_number && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
-                    #{activeCustomer.sequence_number}
-                  </span>
-                )}
-                <span className="text-sm font-bold">{activeCustomer.full_name}</span>
-              </div>
-              <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary">
-                Day: {activeCustomer.collection_day || "monday"}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-              <div>Code: <span className="font-mono font-semibold text-foreground">{activeCustomer.customer_code}</span></div>
-              <div>Mobile: <span className="font-mono font-semibold text-foreground">{activeCustomer.mobile_number}</span></div>
-              <div>Start Date: <span className="font-mono font-semibold text-foreground">{activeCustomer.start_date}</span></div>
-              <div>Status: <span className="capitalize font-semibold text-emerald-700">{activeCustomer.status}</span></div>
-            </div>
-          </div>
-
-          {/* Financial Summary */}
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div className="p-2.5 rounded-lg bg-muted/50 border border-border/60">
-              <p className="text-[10px] text-muted-foreground font-medium">Principal</p>
-              <p className="font-bold text-foreground mt-0.5 font-mono">{inr(Number(activeCustomer.loan_amount || 0))}</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-muted/50 border border-border/60">
-              <p className="text-[10px] text-muted-foreground font-medium">Total Due</p>
-              <p className="font-bold text-foreground mt-0.5 font-mono">{inr(Number(activeCustomer.total_due || 0))}</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
-              <p className="text-[10px] text-primary font-medium">Outstanding</p>
-              <p className="font-bold text-primary mt-0.5 font-mono">{inr(Number(activeCustomer.outstanding_balance || 0))}</p>
-            </div>
-          </div>
-
-          {/* Installment Passbook */}
-          <div className="space-y-1">
-            <h4 className="text-xs font-bold text-foreground">Installment Passbook</h4>
-            <InstallmentPassbookGrid
-              total={activeCustomer.total_installments || 20}
-              paid={activeCustomer.installments_paid_count || 0}
-            />
-          </div>
-
-          {/* Collection Receipts History */}
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-foreground">Recorded Payments ({history.length})</h4>
-              <span className="text-xs font-bold text-emerald-700 font-mono">Total Paid: {inr(totalCollected)}</span>
-            </div>
-
-            {loading && history.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">Loading history...</p>
-            ) : history.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4 bg-muted/20 rounded-lg">No payment entries recorded yet.</p>
-            ) : (
-              <div className="max-h-48 overflow-y-auto border border-border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 text-[11px]">
-                      <TableHead className="py-2">Receipt #</TableHead>
-                      <TableHead className="py-2">Date</TableHead>
-                      <TableHead className="py-2">Amount</TableHead>
-                      <TableHead className="py-2">Mode</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((h) => (
-                      <TableRow key={h.public_id} className="text-xs">
-                        <TableCell className="font-mono text-[11px] py-1.5 font-semibold">{h.receipt_number}</TableCell>
-                        <TableCell className="py-1.5 text-[11px]">{h.collection_date}</TableCell>
-                        <TableCell className="font-bold text-emerald-600 font-mono py-1.5">{inr(h.collected_amount)}</TableCell>
-                        <TableCell className="py-1.5 text-[11px]">{h.payment_mode_name || "Cash"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <div className="space-y-4 pt-2">
+            {saveMsg && (
+              <div className="p-2 text-xs font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 rounded-md flex items-center gap-1.5">
+                <CheckCircle2 className="size-4 shrink-0" />
+                {saveMsg}
               </div>
             )}
-          </div>
-        </div>
 
-        <DialogFooter className="pt-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {/* Header Card */}
+            <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between font-semibold">
+                <div className="flex items-center gap-1.5">
+                  {activeCustomer.sequence_number && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
+                      #{activeCustomer.sequence_number}
+                    </span>
+                  )}
+                  <span className="text-sm font-bold">{activeCustomer.full_name}</span>
+                </div>
+                <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary">
+                  Day: {activeCustomer.collection_day || "monday"}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                <div>Code: <span className="font-mono font-semibold text-foreground">{activeCustomer.customer_code}</span></div>
+                <div>Mobile: <span className="font-mono font-semibold text-foreground">{activeCustomer.mobile_number}</span></div>
+                <div>Disbursed Date: <span className="font-mono font-semibold text-foreground">{activeCustomer.start_date ? formatFilterDate(activeCustomer.start_date) : "-"}</span></div>
+                <div>Status: <span className="capitalize font-semibold text-emerald-700">{activeCustomer.status}</span></div>
+              </div>
+            </div>
+
+            {/* Financial Summary */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-lg bg-muted/50 border border-border/60">
+                <p className="text-[10px] text-muted-foreground font-medium">Principal</p>
+                <p className="font-bold text-foreground mt-0.5 font-mono">{inr(Number(activeCustomer.loan_amount || 0))}</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-muted/50 border border-border/60">
+                <p className="text-[10px] text-muted-foreground font-medium">Total Due</p>
+                <p className="font-bold text-foreground mt-0.5 font-mono">{inr(Number(activeCustomer.total_due || 0))}</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-[10px] text-primary font-medium">Outstanding</p>
+                <p className="font-bold text-primary mt-0.5 font-mono">{inr(Number(activeCustomer.outstanding_balance || 0))}</p>
+              </div>
+            </div>
+
+            {/* Installment Passbook */}
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold text-foreground">Installment Passbook</h4>
+              <InstallmentPassbookGrid
+                total={activeCustomer.total_installments || 20}
+                paid={activeCustomer.installments_paid_count || 0}
+                skipped={activeCustomer.skipped_installments_count || 0}
+                outstanding={activeCustomer.outstanding_balance}
+                historyStatuses={buildHistoryStatuses(history)}
+              />
+            </div>
+
+            {/* Collection Receipts History */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-foreground">Recorded Payments ({history.length})</h4>
+                  {!isEditMode ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 font-semibold text-primary border-primary/30 hover:bg-primary/10 gap-1"
+                      onClick={() => setIsEditMode(true)}
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2 font-medium text-muted-foreground hover:text-foreground"
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel Editing
+                    </Button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isEditMode && modifiedRecords.length > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-6 text-[10px] px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs gap-1"
+                      onClick={() => setShowConfirmModal(true)}
+                    >
+                      Save ({modifiedRecords.length}) Changes
+                    </Button>
+                  )}
+                  <span className="text-xs font-bold text-emerald-700 font-mono">Total Paid: {inr(totalCollected)}</span>
+                </div>
+              </div>
+
+              {loading && history.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Loading history...</p>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4 bg-muted/20 rounded-lg">No payment entries recorded yet.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto border border-border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-[11px]">
+                        <TableHead className="py-2">Receipt #</TableHead>
+                        <TableHead className="py-2">Collection Date</TableHead>
+                        <TableHead className="py-2">Amount</TableHead>
+                        <TableHead className="py-2">Mode</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {history.map((h) => {
+                        const isAlreadyEdited = h.is_edited || (h.edit_count && h.edit_count >= 1);
+                        const isSkipped = h.status_code === "skipped" || h.status_name?.toLowerCase().includes("skipped");
+
+                        return (
+                          <TableRow key={h.public_id} className="text-xs">
+                            <TableCell className="font-mono text-[11px] py-1.5 font-semibold">{h.receipt_number}</TableCell>
+                            <TableCell className="py-1.5 text-[11px]">
+                              {isEditMode ? (
+                                isAlreadyEdited ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono">{h.collection_date}</span>
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1 border-amber-500/30 text-amber-700 bg-amber-500/10 font-bold">
+                                      <Lock className="size-2.5 mr-0.5" /> Locked
+                                    </Badge>
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="date"
+                                    value={draftDates[h.public_id] ?? h.collection_date}
+                                    onChange={(e) =>
+                                      setDraftDates((prev) => ({
+                                        ...prev,
+                                        [h.public_id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-7 text-xs font-mono border border-primary/40 rounded px-1.5 bg-background text-foreground focus:ring-1 focus:ring-primary"
+                                  />
+                                )
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono">{h.collection_date}</span>
+                                  {isAlreadyEdited && (
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1 border-amber-500/30 text-amber-700 bg-amber-500/10 font-bold">
+                                      <Lock className="size-2.5 mr-0.5" /> Edited
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className={`font-bold font-mono py-1.5 ${isSkipped ? "text-amber-600" : "text-emerald-600"}`}>
+                              {isSkipped ? "Skipped (₹0)" : inr(h.collected_amount)}
+                            </TableCell>
+                            <TableCell className="py-1.5 text-[11px]">{h.payment_mode_name || "Cash"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <Lock className="size-5 text-amber-600" /> Confirm Date Modification
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-xs text-muted-foreground space-y-2 pt-1">
+                <p>
+                  You are modifying collection dates for <strong>{modifiedRecords.length} record(s)</strong>.
+                </p>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-900 dark:text-amber-200 text-xs space-y-1.5">
+                  <p className="font-bold">⚠️ One-Time Edit Rule & Mandatory Audit Trail:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px]">
+                    <li>An installment record can be edited <strong>ONLY ONCE</strong>.</li>
+                    <li>This action will log an <strong>audit entry</strong> with your username and date changes.</li>
+                    <li>Modified record(s) will be permanently locked after saving.</li>
+                  </ul>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-2 flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowConfirmModal(false)} disabled={savingDates}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              onClick={handleConfirmSaveDates}
+              disabled={savingDates}
+            >
+              {savingDates ? "Saving & Logging..." : "Confirm & Save (Log Audit)"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

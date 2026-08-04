@@ -66,8 +66,8 @@ function ProfilePage() {
       ]);
       setProfile(u);
       setWorkspace(w);
-      setActivities(logs);
-      setSessions(sessList);
+      setActivities(logs.items || []);
+      setSessions(sessList.items || []);
 
       // Personal Data
       setFullName(u.full_name || "");
@@ -243,16 +243,18 @@ function ProfilePage() {
         </div>
       )}
 
-      <Tabs defaultValue="personal">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="personal">Personal</TabsTrigger>
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="devices">Devices</TabsTrigger>
-          <TabsTrigger value="activity">Activity Log</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="personal" className="space-y-4">
+        <div className="w-full overflow-x-auto pb-1 max-w-full">
+          <TabsList className="inline-flex h-10 w-max items-center justify-start gap-1 rounded-xl bg-muted/80 p-1 text-muted-foreground">
+            <TabsTrigger value="personal" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Personal</TabsTrigger>
+            <TabsTrigger value="business" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Business</TabsTrigger>
+            <TabsTrigger value="sessions" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Sessions</TabsTrigger>
+            <TabsTrigger value="devices" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Devices</TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Activity Log</TabsTrigger>
+            <TabsTrigger value="preferences" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Preferences</TabsTrigger>
+            <TabsTrigger value="security" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Security</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="personal">
           <Card className="p-6">

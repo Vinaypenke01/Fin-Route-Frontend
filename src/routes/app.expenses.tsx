@@ -12,6 +12,7 @@ import { Plus, Search, Filter, Calendar, RefreshCw } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Expense } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
+import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
 
 export const Route = createFileRoute("/app/expenses")({
   head: () => ({ meta: [{ title: "Expenses — FinRoute" }, { name: "description", content: "Track every rupee spent." }] }),
@@ -229,11 +230,7 @@ function ExpensesPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
-                    Loading expenses from database...
-                  </TableCell>
-                </TableRow>
+                <TableSkeletonRows rows={4} columns={5} />
               ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
@@ -248,7 +245,11 @@ function ExpensesPage() {
                       <Badge variant="outline">{e.category_name || "General"}</Badge>
                     </TableCell>
                     <TableCell className="text-sm font-medium">{e.description || "-"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{e.payment_mode_name || "Cash"}</TableCell>
+                    <TableCell className="text-xs font-medium">
+                      <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold">
+                        {e.payment_mode_name || "Cash"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right font-bold">{inr(e.amount)}</TableCell>
                   </TableRow>
                 ))
@@ -261,32 +262,53 @@ function ExpensesPage() {
   );
 }
 
-function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen: (v: boolean) => void; onSuccess: () => void }) {
+function AddExpenseModal({
+  open,
+  setOpen,
+  onSuccess,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
   const [categories, setCategories] = useState<MasterItem[]>([]);
+  const [paymentModes, setPaymentModes] = useState<MasterItem[]>([]);
   const [selectedCat, setSelectedCat] = useState<number>(1);
-  const [amount, setAmount] = useState<number>(500);
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<number | null>(null);
+  const [amountStr, setAmountStr] = useState<string>("500");
   const [expenseDate, setExpenseDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [description, setDescription] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadCategories() {
+    async function loadMasters() {
       try {
-        const cats = await mastersService.getExpenseCategories();
+        const [cats, modes] = await Promise.all([
+          mastersService.getExpenseCategories(),
+          mastersService.getPaymentModes(),
+        ]);
         setCategories(cats);
+        setPaymentModes(modes);
         if (cats[0]) setSelectedCat(cats[0].id);
+        if (modes[0]) setSelectedPaymentMode(modes[0].id);
       } catch (err) {
-        console.error("Failed to load categories:", err);
+        console.error("Failed to load master data:", err);
       }
     }
-    if (open) loadCategories();
+    if (open) {
+      loadMasters();
+      setAmountStr("500");
+      setDescription("");
+      setError(null);
+    }
   }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!amount || Number(amount) <= 0) {
+    const numAmount = parseFloat(amountStr) || 0;
+    if (numAmount <= 0) {
       setError("Expense amount must be greater than ₹0.");
       return;
     }
@@ -298,9 +320,10 @@ function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen:
     try {
       await guestWorkspaceService.recordExpense({
         category: selectedCat,
-        amount,
+        amount: numAmount,
         expense_date: expenseDate,
         description: description.trim(),
+        payment_mode: selectedPaymentMode || undefined,
       });
       setOpen(false);
       onSuccess();
@@ -322,7 +345,7 @@ function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen:
         <DialogHeader>
           <DialogTitle>Log Operational Expense</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Record fuel, agent tea/snacks, stationary, or workspace operational expenses.
+            Record fuel, agent tea/snacks, stationery, or workspace operational expenses.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -331,31 +354,59 @@ function AddExpenseModal({ open, setOpen, onSuccess }: { open: boolean; setOpen:
               {error}
             </div>
           )}
-          <div>
-            <label className="text-xs font-medium">Expense Category</label>
-            <Select value={selectedCat.toString()} onValueChange={(v) => setSelectedCat(Number(v))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold">Expense Category *</label>
+              <Select value={selectedCat.toString()} onValueChange={(v) => setSelectedCat(Number(v))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold">Payment Mode / Option *</label>
+              <Select
+                value={selectedPaymentMode ? selectedPaymentMode.toString() : ""}
+                onValueChange={(v) => setSelectedPaymentMode(Number(v))}
+              >
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select Payment Mode" /></SelectTrigger>
+                <SelectContent>
+                  {paymentModes.map((m) => (
+                    <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
-            <label className="text-xs font-medium">Amount (₹)</label>
-            <Input type="number" className="mt-1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
+            <label className="text-xs font-semibold">Amount (₹) *</label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="mt-1 font-mono font-bold text-base"
+              value={amountStr}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/\D/g, "");
+                setAmountStr(cleaned);
+              }}
+              placeholder="e.g. 500"
+              required
+            />
           </div>
           <div>
-            <label className="text-xs font-medium">Date</label>
+            <label className="text-xs font-semibold">Expense Date *</label>
             <Input type="date" className="mt-1" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} required />
           </div>
           <div>
-            <label className="text-xs font-medium">Description / Remarks</label>
-            <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Petrol for collection bike" />
+            <label className="text-xs font-semibold">Description / Remarks *</label>
+            <Input className="mt-1 text-xs" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Petrol for collection bike / Chai for field agents" required />
           </div>
-          <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? "Saving..." : "Record Expense"}
+          <Button type="submit" className="w-full font-semibold" disabled={submitting}>
+            {submitting ? "Saving Expense..." : "Record Expense"}
           </Button>
         </form>
       </DialogContent>

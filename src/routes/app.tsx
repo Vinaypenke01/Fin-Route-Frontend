@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Bell, Search, Sparkles, User, Settings, LogOut, Sun, Moon, Compass } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/hooks/use-auth";
+import { BrandLoader } from "@/components/ui/brand-loader";
 import { OnboardingTour, useOnboarding } from "@/components/onboarding-tour";
 import { InstallPrompt, InstallStatusBadge } from "@/components/install-prompt";
 import { PwaInstallButton } from "@/components/pwa-install-button";
@@ -37,12 +39,24 @@ const titles: Record<string, string> = {
   "/app/settings": "Settings",
   "/app/upgrade": "Upgrade",
 };
-
 function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const title = titles[pathname] ?? "Workspace";
   const { theme, toggle } = useTheme();
   const tour = useOnboarding();
+  const { user, workspace, logout } = useAuth();
+
+  const displayName = user?.full_name || "Guest Lender";
+  const displayBusiness = workspace?.name || "Workspace";
+  const displayPlan = workspace?.plan ? workspace.plan.toUpperCase() : "GUEST";
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase() || "GL";
 
   return (
     <SidebarProvider>
@@ -89,13 +103,17 @@ function AppLayout() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button aria-label="Account" className="rounded-full outline-none focus:ring-2 focus:ring-ring">
-                  <Avatar className="size-9"><AvatarFallback className="bg-primary text-primary-foreground text-sm">RS</AvatarFallback></Avatar>
+                  <Avatar className="size-9">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
-                  <div className="text-sm font-semibold">Rajesh Sharma</div>
-                  <div className="text-xs text-muted-foreground">Sharma Finance · Guest</div>
+                  <div className="text-sm font-semibold truncate">{displayName}</div>
+                  <div className="text-xs text-muted-foreground truncate">{displayBusiness} · {displayPlan}</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link to="/app/profile"><User className="size-4" /> Profile</Link></DropdownMenuItem>
@@ -107,7 +125,9 @@ function AppLayout() {
                 <DropdownMenuItem onClick={tour.start}><Compass className="size-4" /> Replay tour</DropdownMenuItem>
                 <DropdownMenuItem asChild><Link to="/app/upgrade"><Sparkles className="size-4" /> Upgrade</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link to="/login"><LogOut className="size-4" /> Log out</Link></DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+                  <LogOut className="size-4" /> Log out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </header>

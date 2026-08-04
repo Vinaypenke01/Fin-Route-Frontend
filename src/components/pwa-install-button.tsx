@@ -31,30 +31,51 @@ export function PwaInstallButton({
       setInstalled(true);
     }
 
+    if ((window as any).deferredPwaPrompt) {
+      setDeferredPrompt((window as any).deferredPwaPrompt);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
+      (window as any).deferredPwaPrompt = e;
+    };
+
+    const handleAppInstalled = () => {
+      setInstalled(true);
+      setDeferredPrompt(null);
+      (window as any).deferredPwaPrompt = null;
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === "accepted") {
-        setInstalled(true);
-        setDeferredPrompt(null);
+    const promptEvent = deferredPrompt || (window as any).deferredPwaPrompt;
+
+    if (promptEvent) {
+      try {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice.outcome === "accepted") {
+          setInstalled(true);
+          setDeferredPrompt(null);
+          (window as any).deferredPwaPrompt = null;
+          return;
+        }
+      } catch (err) {
+        console.error("Native install prompt error:", err);
       }
-    } else {
-      // Show guide modal if native prompt is unavailable (iOS Safari / Already prompted)
-      setIsGuideOpen(true);
     }
+
+    // Show guide modal if native prompt is unavailable (iOS Safari / already installed / prompt waiting)
+    setIsGuideOpen(true);
   };
 
   if (installed) {
@@ -64,6 +85,8 @@ export function PwaInstallButton({
       </div>
     );
   }
+
+  const activePrompt = deferredPrompt || (typeof window !== "undefined" && (window as any).deferredPwaPrompt);
 
   return (
     <>
@@ -92,6 +115,30 @@ export function PwaInstallButton({
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
+            {activePrompt && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2">
+                <p className="font-bold text-emerald-700 dark:text-emerald-400">Direct Browser Installation Ready!</p>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (activePrompt) {
+                      setIsGuideOpen(false);
+                      await activePrompt.prompt();
+                      const choice = await activePrompt.userChoice;
+                      if (choice.outcome === "accepted") {
+                        setInstalled(true);
+                        setDeferredPrompt(null);
+                        (window as any).deferredPwaPrompt = null;
+                      }
+                    }
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                  <Download className="size-4 mr-1.5" /> Install App Directly Now
+                </Button>
+              </div>
+            )}
+
             {/* Android / Chrome */}
             <div className="p-3 bg-muted/50 rounded-lg border border-border space-y-1.5">
               <div className="font-bold flex items-center gap-1.5 text-foreground">
@@ -124,8 +171,8 @@ export function PwaInstallButton({
           </div>
 
           <DialogFooter>
-            <Button size="sm" onClick={() => setIsGuideOpen(false)} className="w-full font-bold">
-              Got it
+            <Button size="sm" variant="outline" onClick={() => setIsGuideOpen(false)} className="w-full font-bold">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

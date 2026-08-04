@@ -17,21 +17,29 @@ export const Route = createFileRoute("/app/calculator")({
 });
 
 function CalculatorPage() {
-  const [principal, setPrincipal] = useState(50000);
-  const [interest, setInterest] = useState(24);
-  const [duration, setDuration] = useState(30);
+  const [principalStr, setPrincipalStr] = useState("50000");
+  const [interestStr, setInterestStr] = useState("24");
+  const [durationStr, setDurationStr] = useState("30");
   const [frequency, setFrequency] = useState<string>("daily");
   const [result, setResult] = useState<CalculatorResult | null>(null);
 
+  const principalNum = parseFloat(principalStr) || 0;
+  const interestNum = parseFloat(interestStr) || 0;
+  const durationNum = parseInt(durationStr, 10) || 0;
+
   useEffect(() => {
     async function calculate() {
+      if (principalNum <= 0 || durationNum <= 0) {
+        setResult(null);
+        return;
+      }
       try {
         const data = await guestWorkspaceService.calculateLoan({
-          amount: principal,
-          interest_rate: interest,
+          amount: principalNum,
+          interest_rate: interestNum,
           interest_type: "flat_percentage",
           frequency,
-          duration,
+          duration: durationNum,
         });
         setResult(data);
       } catch (err) {
@@ -39,7 +47,7 @@ function CalculatorPage() {
       }
     }
     calculate();
-  }, [principal, interest, duration, frequency]);
+  }, [principalNum, interestNum, durationNum, frequency]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -57,33 +65,86 @@ function CalculatorPage() {
           <div>
             <div className="flex items-center justify-between">
               <Label>Loan amount</Label>
-              <span className="text-sm font-semibold">{inr(principal)}</span>
+              <span className="text-sm font-semibold">{inr(principalNum)}</span>
             </div>
             <div className="mt-2 flex gap-3">
-              <Slider value={[principal]} min={1000} max={500000} step={500} onValueChange={([v]) => setPrincipal(v)} className="flex-1" />
-              <Input type="number" value={principal} onChange={(e) => setPrincipal(Number(e.target.value) || 0)} className="w-28" />
+              <Slider
+                value={[principalNum]}
+                min={1000}
+                max={500000}
+                step={500}
+                onValueChange={([v]) => setPrincipalStr(v.toString())}
+                className="flex-1"
+              />
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={principalStr}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, "");
+                  setPrincipalStr(cleaned);
+                }}
+                className="w-28 font-mono font-semibold text-right"
+                placeholder="50000"
+              />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between">
               <Label>Interest (%)</Label>
-              <span className="text-sm font-semibold">{interest}%</span>
+              <span className="text-sm font-semibold">{interestNum}%</span>
             </div>
             <div className="mt-2 flex gap-3">
-              <Slider value={[interest]} min={0} max={60} step={0.5} onValueChange={([v]) => setInterest(v)} className="flex-1" />
-              <Input type="number" value={interest} onChange={(e) => setInterest(Number(e.target.value) || 0)} className="w-28" />
+              <Slider
+                value={[interestNum]}
+                min={0}
+                max={60}
+                step={0.5}
+                onValueChange={([v]) => setInterestStr(v.toString())}
+                className="flex-1"
+              />
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={interestStr}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                  setInterestStr(cleaned);
+                }}
+                className="w-28 font-mono font-semibold text-right"
+                placeholder="24"
+              />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between">
               <Label>Duration (installments)</Label>
-              <span className="text-sm font-semibold">{duration} count</span>
+              <span className="text-sm font-semibold">{durationNum} count</span>
             </div>
             <div className="mt-2 flex gap-3">
-              <Slider value={[duration]} min={1} max={180} step={1} onValueChange={([v]) => setDuration(v)} className="flex-1" />
-              <Input type="number" value={duration} onChange={(e) => setDuration(Number(e.target.value) || 1)} className="w-28" />
+              <Slider
+                value={[durationNum]}
+                min={1}
+                max={180}
+                step={1}
+                onValueChange={([v]) => setDurationStr(v.toString())}
+                className="flex-1"
+              />
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={durationStr}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, "");
+                  setDurationStr(cleaned);
+                }}
+                className="w-28 font-mono font-semibold text-right"
+                placeholder="30"
+              />
             </div>
           </div>
 

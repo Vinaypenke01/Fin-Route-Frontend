@@ -18,10 +18,73 @@
         if (d) document.documentElement.classList.add('dark');
         document.documentElement.style.colorScheme = d ? 'dark' : 'light';
       } catch (e) {}
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').catch(function(err) {
+            console.log('SW registration failed: ', err);
+          });
+        });
+      }
     </script>
   </head>
   <body class="min-h-screen bg-background text-foreground antialiased">
-    <div id="root" class="min-h-screen w-full"></div>
+    <div id="root" class="min-h-screen w-full">
+      <style>
+        .finroute-preloader-bg {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background-color: #ffffff;
+          font-family: 'Sora', 'Inter', system-ui, sans-serif;
+          transition: opacity 0.3s ease;
+        }
+        .dark .finroute-preloader-bg {
+          background-color: #090d16;
+          color: #f8fafc;
+        }
+        .finroute-spinner-ring {
+          width: 56px;
+          height: 56px;
+          border: 3px solid rgba(37, 99, 235, 0.15);
+          border-top-color: #2563eb;
+          border-radius: 50%;
+          animation: finroute-spin 0.8s linear infinite;
+        }
+        .dark .finroute-spinner-ring {
+          border-color: rgba(59, 130, 246, 0.2);
+          border-top-color: #3b82f6;
+        }
+        @keyframes finroute-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes finroute-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(0.95); }
+        }
+        .finroute-brand-logo {
+          width: 44px;
+          height: 44px;
+          object-fit: contain;
+          animation: finroute-pulse 1.8s ease-in-out infinite;
+        }
+      </style>
+      <div class="finroute-preloader-bg">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+          <div class="finroute-spinner-ring"></div>
+          <img src="/logo-removebg-preview (1).png" alt="FinRoute" class="finroute-brand-logo" style="position: absolute;" />
+        </div>
+        <p style="margin-top: 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; color: #1e293b;" class="dark:text-slate-200">
+          FinRoute ERP
+        </p>
+        <p style="margin-top: 4px; font-size: 11px; color: #64748b;">
+          Loading workspace...
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/entry-client.tsx"></script>
   </body>
 </html>

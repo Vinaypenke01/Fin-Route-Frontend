@@ -28,7 +28,7 @@ const catIcon: Record<string, React.ReactNode> = {
 function Expenses() {
   const [sheet, setSheet] = useState(false);
   const [cat, setCat] = useState("Fuel");
-  const [amt, setAmt] = useState<number>(0);
+  const [amtStr, setAmtStr] = useState("");
   const [note, setNote] = useState("");
 
   const todayTotal = 780;
@@ -83,8 +83,18 @@ function Expenses() {
           ))}
         </div>
         <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Amount</p>
-        <input type="number" value={amt||""} onChange={(e)=>setAmt(Number(e.target.value))} placeholder="0"
-          className="mb-3 h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-primary" />
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={amtStr}
+          onChange={(e) => {
+            const cleaned = e.target.value.replace(/\D/g, "");
+            setAmtStr(cleaned);
+          }}
+          placeholder="0"
+          className="mb-3 h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-primary font-mono font-bold"
+        />
         <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Note</p>
         <input value={note} onChange={(e)=>setNote(e.target.value)} placeholder="What was it for"
           className="mb-3 h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-primary" />

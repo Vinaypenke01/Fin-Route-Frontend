@@ -8,7 +8,7 @@ const router = createRouter();
 
 const rootElement = document.getElementById("root") || document.body;
 
-if (rootElement && !rootElement.hasChildNodes()) {
+if (rootElement) {
   const root = createRoot(rootElement);
   root.render(
     <StrictMode>

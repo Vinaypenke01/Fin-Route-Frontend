@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Sparkles, ShieldCheck, Plus, Trash2, Users, UserPlus, Settings2, Calendar, Edit, Power, PowerOff, Ban } from "lucide-react";
+import { Sparkles, ShieldCheck, Plus, Trash2, Users, UserPlus, Settings2, Calendar, Edit, Power, PowerOff, Ban, Eye } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { adminService, AdminWorkspace, SubscriptionPlanConfigItem } from "@/lib/services/admin-service";
+import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/guest-plan")({
@@ -51,6 +53,7 @@ function GuestPlanAdmin() {
   const [newUserForm, setNewUserForm] = useState({
     full_name: "",
     mobile_number: "",
+    email: "",
     password: "",
     workspace_name: "",
     city: "Jaipur",
@@ -58,9 +61,23 @@ function GuestPlanAdmin() {
   });
   const [isCreatingUser, setIsCreatingUser] = useState(false);
 
-  // Override Modal State
+  // Override, Edit & Details Modal State
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [overrideForm, setOverrideForm] = useState({ max_collection_days: "", max_customers: "" });
+  const [selectedGuestDetail, setSelectedGuestDetail] = useState<AdminWorkspace | null>(null);
+
+  const [editingGuestLender, setEditingGuestLender] = useState<AdminWorkspace | null>(null);
+  const [editLenderForm, setEditLenderForm] = useState({
+    owner_name: "",
+    owner_mobile: "",
+    owner_email: "",
+    name: "",
+    city: "",
+    state: "",
+    subscription_plan: "free",
+    status: "active",
+  });
+  const [isUpdatingLender, setIsUpdatingLender] = useState(false);
 
   const loadData = async () => {
     setLoadingPlans(true);
@@ -191,6 +208,7 @@ function GuestPlanAdmin() {
       await adminService.createLender({
         full_name: newUserForm.full_name,
         mobile_number: newUserForm.mobile_number,
+        email: newUserForm.email || undefined,
         password: newUserForm.password,
         workspace_name: newUserForm.workspace_name,
         city: newUserForm.city,
@@ -203,6 +221,7 @@ function GuestPlanAdmin() {
       setNewUserForm({
         full_name: "",
         mobile_number: "",
+        email: "",
         password: "",
         workspace_name: "",
         city: "Jaipur",
@@ -228,6 +247,49 @@ function GuestPlanAdmin() {
       await loadData();
     } catch (err: any) {
       toast.error(err.message || "Failed to set quota override.");
+    }
+  };
+
+  const handleOpenEditLender = (w: AdminWorkspace) => {
+    setEditingGuestLender(w);
+    setEditLenderForm({
+      owner_name: w.owner_name,
+      owner_mobile: w.owner_mobile,
+      owner_email: w.owner_email || "",
+      name: w.name,
+      city: w.city || "",
+      state: w.state || "",
+      subscription_plan: w.subscription_plan || "free",
+      status: w.status || "active",
+    });
+  };
+
+  const handleSaveEditLender = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGuestLender) return;
+    if (!editLenderForm.owner_name || !editLenderForm.owner_mobile || !editLenderForm.name) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+    setIsUpdatingLender(true);
+    try {
+      await adminService.updateLender(editingGuestLender.public_id, {
+        owner_name: editLenderForm.owner_name,
+        owner_mobile: editLenderForm.owner_mobile,
+        owner_email: editLenderForm.owner_email || undefined,
+        name: editLenderForm.name,
+        city: editLenderForm.city,
+        state: editLenderForm.state,
+        subscription_plan: editLenderForm.subscription_plan,
+        status: editLenderForm.status,
+      });
+      toast.success(`Updated lender details for ${editLenderForm.owner_name}`);
+      setEditingGuestLender(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update lender details.");
+    } finally {
+      setIsUpdatingLender(false);
     }
   };
 
@@ -294,28 +356,30 @@ function GuestPlanAdmin() {
           </Button>
         </div>
 
-        {loadingPlans ? (
-          <div className="p-8 text-center text-xs text-muted-foreground">Loading guest plans catalog...</div>
-        ) : guestPlans.length === 0 ? (
-          <div className="p-8 text-center text-xs text-muted-foreground">
-            No guest plans configured yet. Click "Add New Plan" above to create one.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead>Plan Code</TableHead>
-                <TableHead>Plan Name</TableHead>
-                <TableHead>Monthly Price (₹)</TableHead>
-                <TableHead>Add-on Days</TableHead>
-                <TableHead>Total Allowed Days</TableHead>
-                <TableHead>Tagline / Highlights</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40">
+              <TableHead>Plan Code</TableHead>
+              <TableHead>Plan Name</TableHead>
+              <TableHead>Monthly Price (₹)</TableHead>
+              <TableHead>Add-on Days</TableHead>
+              <TableHead>Total Allowed Days</TableHead>
+              <TableHead>Tagline / Highlights</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loadingPlans ? (
+              <TableSkeletonRows rows={3} columns={8} />
+            ) : guestPlans.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">
+                  No guest plans configured yet. Click "Add New Plan" above to create one.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {guestPlans.map((plan) => (
+            ) : (
+              guestPlans.map((plan) => (
                 <TableRow key={plan.id || plan.plan_code}>
                   <TableCell className="font-mono text-xs font-semibold text-foreground">{plan.plan_code}</TableCell>
                   <TableCell className="font-bold text-xs">
@@ -350,10 +414,10 @@ function GuestPlanAdmin() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              ))
+            )}
+          </TableBody>
+        </Table>
       </Card>
 
       {/* Guest Users Table */}
@@ -383,80 +447,110 @@ function GuestPlanAdmin() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {workspaces.map((w) => (
-              <TableRow key={w.public_id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="size-9 border border-border">
-                      <AvatarFallback className="bg-emerald-500/10 text-emerald-700 text-xs font-bold">
-                        {w.owner_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{w.owner_name}</p>
-                      <p className="text-xs text-muted-foreground">{w.name} {w.city ? `· ${w.city}` : ""}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-xs">{w.owner_mobile}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="capitalize bg-emerald-500/5 text-emerald-800">
-                    {w.subscription_plan}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-xs font-semibold">{w.purchased_additional_days ? `+${w.purchased_additional_days} Days` : "0 Days"}</TableCell>
-                <TableCell className="text-xs font-bold font-mono text-emerald-700">{w.max_collection_days_override ?? (1 + (w.purchased_additional_days || 0))} Days / wk</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={w.status === "active" ? "bg-emerald-500/15 text-emerald-700" : "bg-rose-500/15 text-rose-700"}>
-                    {w.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingWorkspaceId(w.public_id);
-                        setOverrideForm({
-                          max_collection_days: w.max_collection_days_override ? String(w.max_collection_days_override) : "",
-                          max_customers: w.max_customers_override ? String(w.max_customers_override) : "",
-                        });
-                      }}
-                      className="h-7 text-xs gap-1"
-                      title="Quota Override"
-                    >
-                      <Settings2 className="size-3" /> <span className="hidden lg:inline">Quota</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleToggleWorkspaceStatus(w.public_id, w.status, w.owner_name)}
-                      className={`h-7 text-xs gap-1 ${
-                        w.status === "active"
-                          ? "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
-                          : "border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10"
-                      }`}
-                      title={w.status === "active" ? "Deactivate Workspace" : "Activate Workspace"}
-                    >
-                      {w.status === "active" ? <PowerOff className="size-3" /> : <Power className="size-3" />}
-                      <span className="hidden lg:inline">{w.status === "active" ? "Deactivate" : "Activate"}</span>
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteWorkspace(w.public_id, w.owner_name)}
-                      className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
-                      title="Delete Workspace"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
+            {loadingWorkspaces ? (
+              <TableSkeletonRows rows={5} columns={7} />
+            ) : workspaces.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
+                  No guest lenders found.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              workspaces.map((w) => (
+                <TableRow key={w.public_id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-9 border border-border">
+                        <AvatarFallback className="bg-emerald-500/10 text-emerald-700 text-xs font-bold">
+                          {w.owner_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{w.owner_name}</p>
+                        <p className="text-xs text-muted-foreground">{w.name} {w.city ? `· ${w.city}` : ""}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{w.owner_mobile}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="capitalize bg-emerald-500/5 text-emerald-800">
+                      {w.subscription_plan}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs font-semibold">{w.purchased_additional_days ? `+${w.purchased_additional_days} Days` : "0 Days"}</TableCell>
+                  <TableCell className="text-xs font-bold font-mono text-emerald-700">{w.max_collection_days_override ?? (1 + (w.purchased_additional_days || 0))} Days / wk</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={w.status === "active" ? "bg-emerald-500/15 text-emerald-700" : "bg-rose-500/15 text-rose-700"}>
+                      {w.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedGuestDetail(w)}
+                        className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                        title="View Guest Plan & Day-Wise Breakdown"
+                      >
+                        <Eye className="size-3" /> <span className="hidden lg:inline font-semibold">View</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEditLender(w)}
+                        className="h-7 text-xs gap-1 border-blue-500/30 text-blue-700 hover:bg-blue-500/10 dark:text-blue-400"
+                        title="Edit Guest Lender Details"
+                      >
+                        <Edit className="size-3" /> <span className="hidden lg:inline font-semibold">Edit</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingWorkspaceId(w.public_id);
+                          setOverrideForm({
+                            max_collection_days: w.max_collection_days_override ? String(w.max_collection_days_override) : "",
+                            max_customers: w.max_customers_override ? String(w.max_customers_override) : "",
+                          });
+                        }}
+                        className="h-7 text-xs gap-1"
+                        title="Quota Override"
+                      >
+                        <Settings2 className="size-3" /> <span className="hidden lg:inline">Quota</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleWorkspaceStatus(w.public_id, w.status, w.owner_name)}
+                        className={`h-7 text-xs gap-1 ${
+                          w.status === "active"
+                            ? "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                            : "border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10"
+                        }`}
+                        title={w.status === "active" ? "Deactivate Workspace" : "Activate Workspace"}
+                      >
+                        {w.status === "active" ? <PowerOff className="size-3" /> : <Power className="size-3" />}
+                        <span className="hidden lg:inline">{w.status === "active" ? "Deactivate" : "Activate"}</span>
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteWorkspace(w.public_id, w.owner_name)}
+                        className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
+                        title="Delete Workspace"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -608,6 +702,17 @@ function GuestPlanAdmin() {
             </div>
 
             <div>
+              <Label className="text-xs font-semibold">Email Address (Optional)</Label>
+              <Input
+                type="email"
+                placeholder="e.g. ramesh@finance.com"
+                className="mt-1 text-xs"
+                value={newUserForm.email}
+                onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+              />
+            </div>
+
+            <div>
               <Label className="text-xs font-semibold">Password *</Label>
               <PasswordInput
                 placeholder="Set password for guest login"
@@ -685,6 +790,269 @@ function GuestPlanAdmin() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* GUEST USER DETAILS & DAY-WISE CUSTOMER BREAKDOWN MODAL */}
+      <Dialog open={!!selectedGuestDetail} onOpenChange={(open) => !open && setSelectedGuestDetail(null)}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <Users className="size-5 text-primary" /> Guest Workspace & Day-Wise Analysis
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Detailed configuration, current subscription plan, collection days, and day-wise customer distribution.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedGuestDetail && (
+            <div className="space-y-4 pt-2">
+              {/* Profile Header Card */}
+              <div className="p-4 bg-muted/40 border border-border rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="size-11 border border-primary/20">
+                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
+                        {selectedGuestDetail.owner_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-bold text-base text-foreground">{selectedGuestDetail.owner_name}</h3>
+                      <p className="text-xs text-muted-foreground font-medium">{selectedGuestDetail.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="capitalize font-semibold bg-primary/10 text-primary border-primary/20">
+                      Plan: {selectedGuestDetail.subscription_plan}
+                    </Badge>
+                    <Badge variant="outline" className={selectedGuestDetail.status === "active" ? "bg-emerald-500/15 text-emerald-700 font-semibold" : "bg-rose-500/15 text-rose-700 font-semibold"}>
+                      {selectedGuestDetail.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-muted-foreground pt-1">
+                  <div>📱 Mobile: <span className="font-mono font-bold text-foreground">{selectedGuestDetail.owner_mobile}</span></div>
+                  <div>✉️ Email: <span className="font-medium text-foreground">{selectedGuestDetail.owner_email || "N/A"}</span></div>
+                  <div>📍 Location: <span className="font-medium text-foreground">{[selectedGuestDetail.city, selectedGuestDetail.state].filter(Boolean).join(", ") || "N/A"}</span></div>
+                  <div>📅 Registered: <span className="font-medium text-foreground">{new Date(selectedGuestDetail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>
+                </div>
+              </div>
+
+              {/* Plan & Capacity Overview Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <Card className="p-3 bg-card border-border/80 text-center space-y-1">
+                  <span className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wide">Configured Days</span>
+                  <p className="text-lg font-bold font-mono text-primary">
+                    {selectedGuestDetail.configured_days_count || (selectedGuestDetail.allowed_collection_days?.length || 0)} Days
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">of {selectedGuestDetail.max_collection_days || 1} allowed</p>
+                </Card>
+
+                <Card className="p-3 bg-card border-border/80 text-center space-y-1">
+                  <span className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wide">Active Plan</span>
+                  <p className="text-lg font-bold capitalize text-emerald-700 dark:text-emerald-400">
+                    {selectedGuestDetail.subscription_plan}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{selectedGuestDetail.purchased_additional_days ? `+${selectedGuestDetail.purchased_additional_days} Add-on Days` : "Base Plan"}</p>
+                </Card>
+
+                <Card className="p-3 bg-card border-border/80 text-center space-y-1 col-span-2 sm:col-span-1">
+                  <span className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wide">Total Borrowers</span>
+                  <p className="text-lg font-bold font-mono text-foreground">
+                    {selectedGuestDetail.customer_count}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Outstanding: {inr(selectedGuestDetail.total_outstanding_amount || 0)}</p>
+                </Card>
+              </div>
+
+              {/* Configured Route Collection Days */}
+              <div className="p-3.5 bg-muted/30 border border-border/60 rounded-xl space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-primary" /> Configured Route Collection Days
+                </h4>
+                {selectedGuestDetail.allowed_collection_days && selectedGuestDetail.allowed_collection_days.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedGuestDetail.allowed_collection_days.map((day) => (
+                      <Badge key={day} variant="secondary" className="capitalize font-semibold text-xs py-1 px-2.5 bg-primary/10 text-primary border border-primary/20">
+                        {day}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No collection days explicitly configured yet.</p>
+                )}
+              </div>
+
+              {/* Day-Wise Customer Added Breakdown */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Users className="size-3.5 text-primary" /> Borrowers Added Per Collection Day
+                  </h4>
+                  <span className="text-xs font-mono font-bold text-muted-foreground">
+                    Total: {selectedGuestDetail.customer_count} Borrowers
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { key: "monday", label: "Monday" },
+                    { key: "tuesday", label: "Tuesday" },
+                    { key: "wednesday", label: "Wednesday" },
+                    { key: "thursday", label: "Thursday" },
+                    { key: "friday", label: "Friday" },
+                    { key: "saturday", label: "Saturday" },
+                    { key: "sunday", label: "Sunday" },
+                    { key: "unassigned", label: "Unassigned" },
+                  ].map(({ key, label }) => {
+                    const count = selectedGuestDetail.day_wise_customer_counts?.[key] || 0;
+                    const isConfigured = selectedGuestDetail.allowed_collection_days?.includes(key);
+
+                    return (
+                      <div
+                        key={key}
+                        className={`p-2.5 rounded-lg border text-left space-y-1 transition-all ${
+                          count > 0
+                            ? "bg-primary/5 border-primary/30 text-foreground"
+                            : isConfigured
+                            ? "bg-muted/40 border-border/80 text-muted-foreground"
+                            : "bg-muted/10 border-border/40 text-muted-foreground/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold">{label}</span>
+                          {isConfigured && (
+                            <span className="size-1.5 rounded-full bg-emerald-500" title="Configured Route Day" />
+                          )}
+                        </div>
+                        <p className={`font-mono text-base font-extrabold ${count > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                          {count} <span className="text-[10px] font-normal text-muted-foreground">customers</span>
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedGuestDetail(null)}>
+              Close Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT GUEST LENDER DIALOG MODAL */}
+      <Dialog open={!!editingGuestLender} onOpenChange={(open) => !open && setEditingGuestLender(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <Edit className="size-5" /> Edit Guest Lender Details
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Update account holder name, contact info, business name, location, and subscription plan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEditLender} className="space-y-4 pt-2">
+            <div>
+              <Label className="text-xs font-semibold">Lender Full Name *</Label>
+              <Input
+                className="mt-1 text-xs"
+                value={editLenderForm.owner_name}
+                onChange={(e) => setEditLenderForm({ ...editLenderForm, owner_name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Mobile Number *</Label>
+                <Input
+                  className="mt-1 font-mono text-xs"
+                  value={editLenderForm.owner_mobile}
+                  onChange={(e) => setEditLenderForm({ ...editLenderForm, owner_mobile: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Email Address</Label>
+                <Input
+                  type="email"
+                  className="mt-1 text-xs"
+                  value={editLenderForm.owner_email}
+                  onChange={(e) => setEditLenderForm({ ...editLenderForm, owner_email: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">Workspace / Business Name *</Label>
+              <Input
+                className="mt-1 text-xs"
+                value={editLenderForm.name}
+                onChange={(e) => setEditLenderForm({ ...editLenderForm, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">City</Label>
+                <Input
+                  className="mt-1 text-xs"
+                  value={editLenderForm.city}
+                  onChange={(e) => setEditLenderForm({ ...editLenderForm, city: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">State</Label>
+                <Input
+                  className="mt-1 text-xs"
+                  value={editLenderForm.state}
+                  onChange={(e) => setEditLenderForm({ ...editLenderForm, state: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Subscription Plan</Label>
+                <Select value={editLenderForm.subscription_plan} onValueChange={(v) => setEditLenderForm({ ...editLenderForm, subscription_plan: v })}>
+                  <SelectTrigger className="mt-1 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="free">Free / Guest</SelectItem>
+                    <SelectItem value="starter">ERP Starter</SelectItem>
+                    <SelectItem value="premium">Premium</SelectItem>
+                    <SelectItem value="enterprise">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Status</Label>
+                <Select value={editLenderForm.status} onValueChange={(v) => setEditLenderForm({ ...editLenderForm, status: v })}>
+                  <SelectTrigger className="mt-1 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="read_only">Read Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditingGuestLender(null)} disabled={isUpdatingLender}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" disabled={isUpdatingLender}>
+                {isUpdatingLender ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

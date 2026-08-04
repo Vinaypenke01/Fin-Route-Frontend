@@ -42,8 +42,14 @@ export interface AdminWorkspace {
   status: string;
   max_customers_override: number | null;
   max_collection_days_override: number | null;
+  allowed_collection_days?: string[];
+  configured_days_count?: number;
+  max_collection_days?: number;
   purchased_additional_days?: number;
+  max_customers?: number;
   customer_count: number;
+  day_wise_customer_counts?: Record<string, number>;
+  total_outstanding_amount?: number;
   created_at: string;
 }
 
@@ -155,8 +161,24 @@ export const adminService = {
     return res.data;
   },
 
-  async updateLender(id: string, data: Partial<AdminWorkspace>): Promise<AdminWorkspace> {
-    const res = await apiRequest<AdminWorkspace>(`/admin/workspaces/${id}/`, {
+  async updateLender(
+    public_id: string,
+    data: {
+      owner_name?: string;
+      owner_mobile?: string;
+      owner_email?: string;
+      name?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      pin_code?: string;
+      subscription_plan?: string;
+      status?: string;
+      max_customers_override?: number | null;
+      max_collection_days_override?: number | null;
+    }
+  ): Promise<AdminWorkspace> {
+    const res = await apiRequest<AdminWorkspace>(`/admin/workspaces/${public_id}/`, {
       method: "PUT",
       body: JSON.stringify(data),
     });

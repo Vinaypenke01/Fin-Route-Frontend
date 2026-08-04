@@ -89,6 +89,7 @@ export interface Customer {
   total_installments?: number;
   installments_paid_count?: number;
   remaining_installments_count?: number;
+  skipped_installments_count?: number;
   amount_already_collected?: number;
   installment_amount?: number;
   status: "active" | "closed" | "defaulted" | "suspended";
@@ -103,6 +104,12 @@ export interface Collection {
   customer_code: string;
   customer_name: string;
   customer_public_id: string;
+  total_installments?: number;
+  installments_paid_count?: number;
+  remaining_installments_count?: number;
+  outstanding_balance?: number;
+  disbursed_date?: string;
+  customer_start_date?: string;
   collection_date: string;
   expected_amount: number;
   collected_amount: number;
@@ -113,6 +120,8 @@ export interface Collection {
   payment_mode_name: string | null;
   remarks: string;
   is_collected_today?: boolean;
+  is_edited?: boolean;
+  edit_count?: number;
   created_at: string;
 }
 
@@ -235,6 +244,14 @@ export const guestWorkspaceService = {
   }): Promise<Collection> {
     const res = await apiRequest<Collection>("/app/collections/", {
       method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  },
+
+  async updateCollection(id: string, data: Record<string, any>): Promise<Collection> {
+    const res = await apiRequest<Collection>(`/app/collections/${id}/`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     });
     return res.data;

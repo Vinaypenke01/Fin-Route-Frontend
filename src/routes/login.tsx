@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { authService } from "@/lib/services/auth-service";
 import { PwaInstallButton } from "@/components/pwa-install-button";
+import { Loader2 } from "lucide-react";
 import { validatePassword, validateMobileNumber } from "@/lib/auth-validation";
 import { PasswordStrengthChecker } from "@/components/password-strength-checker";
 
@@ -144,8 +145,15 @@ function LoginPage() {
           )}
         </div>
 
-        <Button type="submit" size="lg" disabled={loading} className="font-bold">
-          {loading ? "Signing in..." : "Sign in"}
+        <Button type="submit" size="lg" disabled={loading} className="font-bold flex items-center justify-center gap-2">
+          {loading ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              <span>Verifying & Signing in...</span>
+            </>
+          ) : (
+            "Sign in"
+          )}
         </Button>
 
         <PwaInstallButton

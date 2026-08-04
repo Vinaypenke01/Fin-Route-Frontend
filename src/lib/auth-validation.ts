@@ -40,19 +40,23 @@ export function validatePassword(password: string): PasswordValidationResult {
 }
 
 export function validateMobileNumber(rawMobile: string): { isValid: boolean; cleaned: string; error?: string } {
-  // Strip +91, spaces, hyphens
-  const cleaned = rawMobile.replace(/^\+91/, "").replace(/\D/g, "");
+  let cleaned = rawMobile.replace(/\D/g, "");
+
+  // Only strip 91 country code if the total string is 12 digits (e.g. 919876543210 or +919876543210)
+  if (cleaned.length === 12 && cleaned.startsWith("91")) {
+    cleaned = cleaned.slice(2);
+  }
 
   if (!cleaned) {
     return { isValid: false, cleaned, error: "Mobile number is required." };
   }
 
   if (cleaned.length !== 10) {
-    return { isValid: false, cleaned, error: "Mobile number must be exactly 10 digits." };
+    return { isValid: false, cleaned, error: "Mobile number must be a valid 10-digit Indian number." };
   }
 
   if (!/^[6-9]/.test(cleaned)) {
-    return { isValid: false, cleaned, error: "Mobile number must start with 6, 7, 8, or 9." };
+    return { isValid: false, cleaned, error: "Mobile number must start with 6, 7, 8, or 9 (e.g. 9876543210)." };
   }
 
   return { isValid: true, cleaned };

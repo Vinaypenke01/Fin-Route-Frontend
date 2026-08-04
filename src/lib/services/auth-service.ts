@@ -88,6 +88,33 @@ export const authService = {
   },
 
   /**
+   * Request password reset OTP.
+   */
+  async forgotPassword(mobile_number: string) {
+    const res = await apiRequest("/auth/password/forgot/", {
+      method: "POST",
+      body: JSON.stringify({ mobile_number }),
+    });
+    return res;
+  },
+
+  /**
+   * Confirm password reset with OTP and new password.
+   */
+  async resetPassword(data: {
+    mobile_number: string;
+    otp: string;
+    new_password: string;
+    confirm_password: string;
+  }) {
+    const res = await apiRequest("/auth/password/reset/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res;
+  },
+
+  /**
    * Resend OTP.
    */
   async resendOtp(mobile_number: string, purpose: string = "registration") {

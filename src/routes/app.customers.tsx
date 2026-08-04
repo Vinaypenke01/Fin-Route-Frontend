@@ -12,9 +12,12 @@ import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Ed
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { BorrowerProfileDetailsModal } from "@/components/borrower-profile-modal";
+import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
+import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
 import { guestWorkspaceService, Customer, WorkspaceData, Collection } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/download-customer-image";
+import { validateMobileNumber } from "@/lib/auth-validation";
 
 export const Route = createFileRoute("/app/customers")({
   head: () => ({ meta: [{ title: "Customers — FinRoute" }, { name: "description", content: "Manage your customers, loans and collection history." }] }),
@@ -48,40 +51,106 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
-function InstallmentPassbookGrid({ total = 20, paid = 0 }: { total?: number; paid?: number }) {
-  const safeTotal = Math.min(Math.max(total || 1, 1), 100);
+function InstallmentPassbookGrid({
+  total = 20,
+  paid = 0,
+  skipped = 0,
+  outstanding = 0,
+  onExtend,
+  historyStatuses,
+}: {
+  total?: number;
+  paid?: number;
+  skipped?: number;
+  outstanding?: number;
+  onExtend?: () => void;
+  historyStatuses?: ("paid" | "skipped")[];
+}) {
+  const safeTotal = Math.min(Math.max(total || 1, 1), 300);
   const safePaid = Math.min(paid || 0, safeTotal);
-  const remaining = safeTotal - safePaid;
+  const remaining = Math.max(0, safeTotal - safePaid);
+  const hasSkipped = skipped > 0;
+  const isCompletedWithBalance = safePaid >= safeTotal && outstanding > 0;
 
   return (
     <div className="space-y-1.5 pt-1">
-      <div className="flex items-center justify-between text-[11px] font-medium">
-        <span className="text-muted-foreground font-semibold">
-          Progress: <span className="text-emerald-700 font-bold">{safePaid} Struck Paid</span> / <span className="text-foreground">{safeTotal} Total</span>
+      <div className="flex flex-wrap items-center justify-between text-[11px] font-medium gap-1">
+        <span className="text-muted-foreground font-semibold flex items-center gap-1">
+          Progress:
+          <span className={hasSkipped ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30" : "text-emerald-700 dark:text-emerald-400 font-bold"}>
+            {safePaid} Paid {hasSkipped ? `(${skipped} Skipped)` : ""}
+          </span> / <span className="text-foreground">{safeTotal} Total</span>
         </span>
-        <Badge variant="outline" className="font-mono text-[10px]">
-          {remaining} Remaining
-        </Badge>
+
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
+            {remaining} Remaining
+          </Badge>
+
+          {isCompletedWithBalance && onExtend && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onExtend}
+              className="h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 font-bold gap-0.5"
+              title="Schedule installments completed but balance pending. Click to extend tenure."
+            >
+              <Calendar className="size-3 text-amber-600" /> + Extend
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1.5 bg-muted/40 rounded-lg border border-border/60">
         {Array.from({ length: safeTotal }, (_, i) => {
           const num = i + 1;
-          const isPaid = num <= safePaid;
+          let isPaid = false;
+          let isSkipped = false;
+
+          if (historyStatuses && historyStatuses[i]) {
+            isPaid = historyStatuses[i] === "paid";
+            isSkipped = historyStatuses[i] === "skipped";
+          } else {
+            isPaid = num <= safePaid;
+            const safeSkipped = Math.min(skipped || 0, Math.max(0, safeTotal - safePaid));
+            isSkipped = !isPaid && num <= safePaid + safeSkipped;
+          }
+
           return (
             <div
               key={num}
-              title={isPaid ? `Installment #${num}: PAID (Struck Through)` : `Installment #${num}: Pending`}
-              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${isPaid
-                ? "bg-emerald-600 text-white border-emerald-700 line-through opacity-85 shadow-xs"
-                : "bg-background text-muted-foreground border-border/80"
-                }`}
+              title={
+                isPaid
+                  ? `Installment #${num}: PAID (Struck)`
+                  : isSkipped
+                  ? `Installment #${num}: SKIPPED (Struck Red)`
+                  : `Installment #${num}: Pending`
+              }
+              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${
+                isPaid
+                  ? "bg-emerald-600 text-white border-emerald-700 opacity-90 shadow-xs"
+                  : isSkipped
+                  ? "bg-rose-600 text-white border-rose-700 font-extrabold shadow-xs"
+                  : "bg-background text-muted-foreground border-border/80"
+              }`}
             >
-              {isPaid ? <s>{num}</s> : num}
+              {isPaid || isSkipped ? <s>{num}</s> : num}
             </div>
           );
         })}
       </div>
+
+      {isCompletedWithBalance && (
+        <div className="flex items-center justify-between p-1.5 bg-amber-500/10 rounded-md border border-amber-500/30 text-[11px] text-amber-900 dark:text-amber-300 font-medium">
+          <span>Installments completed, but {inr(outstanding)} remains due.</span>
+          {onExtend && (
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px] text-amber-800 dark:text-amber-200 font-bold underline" onClick={onExtend}>
+              Increase Installments
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -97,6 +166,7 @@ function CustomersPage() {
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [extendingCustomer, setExtendingCustomer] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
@@ -662,6 +732,9 @@ function CustomersPage() {
                 <InstallmentPassbookGrid
                   total={c.total_installments || 20}
                   paid={c.installments_paid_count || 0}
+                  skipped={c.skipped_installments_count || 0}
+                  outstanding={c.outstanding_balance}
+                  onExtend={() => setExtendingCustomer(c)}
                 />
 
                 <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
@@ -724,11 +797,7 @@ function CustomersPage() {
                   </TableCell>
                 </TableRow>
               ) : loading ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-xs text-muted-foreground">
-                    Loading customers...
-                  </TableCell>
-                </TableRow>
+                <TableSkeletonRows rows={5} columns={10} />
               ) : customers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-xs text-muted-foreground">
@@ -767,6 +836,9 @@ function CustomersPage() {
                       <InstallmentPassbookGrid
                         total={c.total_installments || 20}
                         paid={c.installments_paid_count || 0}
+                        skipped={c.skipped_installments_count || 0}
+                        outstanding={c.outstanding_balance}
+                        onExtend={() => setExtendingCustomer(c)}
                       />
                     </TableCell>
                     <TableCell>
@@ -876,6 +948,21 @@ function CustomersPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Extend Installments Dialog */}
+      {extendingCustomer && (
+        <ExtendInstallmentsDialog
+          open={Boolean(extendingCustomer)}
+          onOpenChange={(v) => !v && setExtendingCustomer(null)}
+          customerPublicId={extendingCustomer.public_id}
+          customerName={extendingCustomer.full_name}
+          currentTotalInstallments={extendingCustomer.total_installments || 20}
+          installmentsPaidCount={extendingCustomer.installments_paid_count || 0}
+          outstandingBalance={extendingCustomer.outstanding_balance}
+          installmentAmount={extendingCustomer.installment_amount}
+          onSuccess={loadCustomers}
+        />
+      )}
     </div>
   );
 }
@@ -907,7 +994,8 @@ function NewCustomerModal({
   const [installmentsPaidCount, setInstallmentsPaidCount] = useState(20);
   const [remainingInstallmentsCount, setRemainingInstallmentsCount] = useState(80);
   const [amountAlreadyCollected, setAmountAlreadyCollected] = useState(12000);
-  const [customInstallmentAmount, setCustomInstallmentAmount] = useState<number | "">("");
+  const [customInstallmentAmount, setCustomInstallmentAmount] = useState<string>("");
+  const [isCustomInstallmentEdited, setIsCustomInstallmentEdited] = useState(false);
 
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [frequencies, setFrequencies] = useState<MasterItem[]>([]);
@@ -931,6 +1019,7 @@ function NewCustomerModal({
     setRemainingInstallmentsCount(80);
     setAmountAlreadyCollected(12000);
     setCustomInstallmentAmount("");
+    setIsCustomInstallmentEdited(false);
     setStartDate(new Date().toISOString().split("T")[0]);
     setError(null);
   };
@@ -967,7 +1056,22 @@ function NewCustomerModal({
     : totalInstallmentsInput;
 
   const calculatedPerInstallment = effectiveTotalInstallments > 0 ? totalPayable / effectiveTotalInstallments : 0;
-  const effectivePerInstallment = customInstallmentAmount !== "" ? Number(customInstallmentAmount) : calculatedPerInstallment;
+
+  // Auto-fill customInstallmentAmount when loan details change unless manually edited
+  useEffect(() => {
+    if (!isCustomInstallmentEdited) {
+      if (calculatedPerInstallment > 0) {
+        setCustomInstallmentAmount(Math.round(calculatedPerInstallment).toString());
+      } else {
+        setCustomInstallmentAmount("");
+      }
+    }
+  }, [calculatedPerInstallment, isCustomInstallmentEdited]);
+
+  const effectivePerInstallment =
+    customInstallmentAmount.trim() !== "" && !isNaN(Number(customInstallmentAmount))
+      ? Number(customInstallmentAmount)
+      : Math.round(calculatedPerInstallment * 100) / 100;
 
   const remainingOutstanding = isExistingBorrower
     ? Math.max(0, totalPayable - amountAlreadyCollected)
@@ -986,12 +1090,12 @@ function NewCustomerModal({
     }
 
     // 2. Mobile Number Validation (Indian 10-digit format starting with 6-9)
-    const cleanMobile = mobileNumber.replace(/\D/g, "").replace(/^91/, "");
-    const mobileRegex = /^[6-9]\d{9}$/;
-    if (!mobileRegex.test(cleanMobile)) {
-      setError("Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9 (e.g. 9876543210).");
+    const mobileVal = validateMobileNumber(mobileNumber);
+    if (!mobileVal.isValid) {
+      setError(mobileVal.error || "Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9 (e.g. 9876543210).");
       return;
     }
+    const cleanMobile = mobileVal.cleaned;
 
     // 3. Principal & Disbursed Loan Validation
     if (!loanAmount || loanAmount <= 0) {
@@ -1254,15 +1358,36 @@ function NewCustomerModal({
               <label className="text-xs font-semibold flex items-center gap-1">
                 <Edit3 className="size-3.5 text-primary" /> Estimated Per Installment Amount (₹) *
               </label>
-              <span className="text-[10px] font-mono text-muted-foreground">
-                Auto-calculated: {inr(calculatedPerInstallment)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  Auto: {inr(calculatedPerInstallment)}
+                </span>
+                {isCustomInstallmentEdited && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1.5 text-[10px] text-primary hover:bg-primary/10 font-bold"
+                    onClick={() => {
+                      setIsCustomInstallmentEdited(false);
+                      setCustomInstallmentAmount(Math.round(calculatedPerInstallment).toString());
+                    }}
+                  >
+                    Reset Auto
+                  </Button>
+                )}
+              </div>
             </div>
             <Input
               type="number"
-              className="font-mono font-bold text-primary h-9"
-              value={customInstallmentAmount !== "" ? customInstallmentAmount : Math.round(calculatedPerInstallment)}
-              onChange={(e) => setCustomInstallmentAmount(e.target.value ? Number(e.target.value) : "")}
+              step="any"
+              min="0.01"
+              className="font-mono font-bold text-primary h-9 text-xs sm:text-sm"
+              value={customInstallmentAmount}
+              onChange={(e) => {
+                setIsCustomInstallmentEdited(true);
+                setCustomInstallmentAmount(e.target.value);
+              }}
               placeholder={`Auto: ₹${Math.round(calculatedPerInstallment)}`}
               required
             />
@@ -1464,7 +1589,7 @@ function EditCustomerModal({
 
             <div>
               <label className="text-[11px] font-semibold">Estimated Per Installment Amount (₹) *</label>
-              <Input type="number" className="mt-1 h-9 font-mono font-bold text-primary text-xs" value={installmentAmount} onChange={(e) => setInstallmentAmount(Number(e.target.value))} required />
+              <Input type="number" step="any" min="0.01" className="mt-1 h-9 font-mono font-bold text-primary text-xs" value={installmentAmount} onChange={(e) => setInstallmentAmount(e.target.value ? Number(e.target.value) : 0)} required />
             </div>
           </div>
 

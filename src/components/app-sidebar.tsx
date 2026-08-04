@@ -8,6 +8,8 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar
 } from "@/components/ui/sidebar";
 
+import { useAuth } from "@/hooks/use-auth";
+
 const nav = [
   { title: "Dashboard", url: "/app", icon: LayoutDashboard, exact: true, tour: "sidebar-dashboard" },
   { title: "Customers", url: "/app/customers", icon: Users, tour: "sidebar-customers" },
@@ -25,6 +27,7 @@ const more = [
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { setOpenMobile, isMobile } = useSidebar();
+  const { logout } = useAuth();
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -90,11 +93,16 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Log out">
-              <Link to="/login" onClick={handleNavClick}>
-                <LogOut />
-                <span>Log out</span>
-              </Link>
+            <SidebarMenuButton
+              tooltip="Log out"
+              onClick={() => {
+                handleNavClick();
+                logout();
+              }}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+            >
+              <LogOut />
+              <span>Log out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

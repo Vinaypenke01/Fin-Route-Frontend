@@ -52,8 +52,8 @@ function ProfilePage() {
         authService.getSessions(),
       ]);
       setProfile(data);
-      setActivities(logs);
-      setSessions(sessList);
+      setActivities(logs.items || []);
+      setSessions(sessList.items || []);
       setFullName(data.full_name || "");
       setEmail(data.email || "");
       setCity(data.city || "");
@@ -183,16 +183,18 @@ function ProfilePage() {
         </div>
       )}
 
-      <Tabs defaultValue="info">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="info">Information</TabsTrigger>
-          <TabsTrigger value="password">Change Password</TabsTrigger>
-          <TabsTrigger value="2fa">Two-Factor</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="devices">Devices</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="info" className="space-y-4">
+        <div className="w-full overflow-x-auto pb-1 max-w-full">
+          <TabsList className="inline-flex h-10 w-max items-center justify-start gap-1 rounded-xl bg-muted/80 p-1 text-muted-foreground">
+            <TabsTrigger value="info" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Information</TabsTrigger>
+            <TabsTrigger value="password" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Change Password</TabsTrigger>
+            <TabsTrigger value="2fa" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Two-Factor</TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Activity</TabsTrigger>
+            <TabsTrigger value="sessions" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Sessions</TabsTrigger>
+            <TabsTrigger value="devices" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Devices</TabsTrigger>
+            <TabsTrigger value="preferences" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Preferences</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="info">
           <Card>
