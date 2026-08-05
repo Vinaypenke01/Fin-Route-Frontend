@@ -55,10 +55,40 @@ export interface DashboardMetrics {
   collections_today: number;
   amount_collected_today: number;
   amount_collected_this_week: number;
+  disbursements_today?: number;
+  new_borrowers_today?: number;
+  capital_today?: number;
+  net_cash_today?: number;
+  is_cash_deficit?: boolean;
   outstanding_balance: number;
   pending_today: number;
   expenses_today: number;
   expenses_this_month: number;
+}
+
+export interface CapitalEntry {
+  public_id: string;
+  entry_date: string;
+  amount: number;
+  remarks?: string;
+  added_by_name?: string;
+  created_at?: string;
+}
+
+export interface CashReconciliation {
+  date: string;
+  collections_total: number;
+  collections_count: number;
+  capital_total: number;
+  capital_count: number;
+  disbursements_total: number;
+  disbursements_count: number;
+  expenses_total: number;
+  expenses_count: number;
+  total_inflow: number;
+  total_outflow: number;
+  net_cash_handheld: number;
+  is_cash_deficit: boolean;
 }
 
 export interface Customer {
@@ -364,6 +394,33 @@ export const guestWorkspaceService = {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
     const query = new URLSearchParams({ type, format, ...params }).toString();
     return `${API_BASE_URL}/app/reports/export/?${query}`;
+  },
+
+  // ─── Capital Entries & Daily Cash Reconciliation ──────────────────────────────
+  async recordCapital(payload: { entry_date: string; amount: number; remarks?: string }): Promise<CapitalEntry> {
+    const res = await apiRequest<CapitalEntry>("/app/capital/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res.data;
+  },
+
+  async getCapitalEntries(entry_date?: string): Promise<CapitalEntry[]> {
+    const query = entry_date ? `?entry_date=${entry_date}` : "";
+    const res = await apiRequest<CapitalEntry[]>(`/app/capital/${query}`);
+    return res.data || [];
+  },
+
+  async deleteCapital(public_id: string): Promise<void> {
+    await apiRequest(`/app/capital/${public_id}/`, {
+      method: "DELETE",
+    });
+  },
+
+  async getCashReconciliation(date?: string): Promise<CashReconciliation> {
+    const query = date ? `?date=${date}` : "";
+    const res = await apiRequest<CashReconciliation>(`/app/cash-reconciliation/${query}`);
+    return res.data;
   },
 
   /**

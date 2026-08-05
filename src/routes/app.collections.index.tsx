@@ -15,6 +15,7 @@ import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
+import { DailyCashReconciliationCard } from "@/components/daily-cash-reconciliation-card";
 import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loaders";
 
 export const Route = createFileRoute("/app/collections/")({
@@ -257,10 +258,16 @@ function CollectionsPage() {
       setWorkspace(ws);
       const savedDays = ws.allowed_collection_days || [];
       setConfiguredDays(savedDays);
-      if (savedDays.length === 1) {
+
+      const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      if (savedDays.includes(currentDayName)) {
+        setSelectedDay(currentDayName);
+      } else if (savedDays.length === 1) {
         setSelectedDay(savedDays[0]);
       } else if (savedDays.length > 1) {
         setSelectedDay("all");
+      } else {
+        setSelectedDay(currentDayName);
       }
     } catch (err) {
       console.error("Workspace load error:", err);
@@ -423,6 +430,9 @@ function CollectionsPage() {
 
   return (
     <div className="space-y-6">
+      {/* 0. Daily Cash Flow & Reconciliation Card */}
+      <DailyCashReconciliationCard date={selectedDate} onRefresh={loadCollections} />
+
       {/* 1. Collection Day Selection Header Card */}
       <Card className="p-4 space-y-3 bg-card border-border shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
