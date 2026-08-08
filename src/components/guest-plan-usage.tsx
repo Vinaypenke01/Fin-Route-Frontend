@@ -81,7 +81,7 @@ export function GuestPlanUsage({ compact = false, showCalendar = true }: { compa
         </div>
       </Card>
 
-      {showCalendar && <WeeklyUsageCalendar workspace={workspace} />}
+      {/* {showCalendar && <WeeklyUsageCalendar workspace={workspace} />} */}
     </div>
   );
 }

@@ -8,13 +8,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare, Image as ImageIcon } from "lucide-react";
+import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare, Image as ImageIcon, MapPin, Plus, RefreshCw, Users } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { BorrowerProfileDetailsModal } from "@/components/borrower-profile-modal";
 import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
+import { LineSetupDialog } from "@/components/line-setup-dialog";
+import { ReassignRouteDialog } from "@/components/reassign-route-dialog";
 import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
-import { guestWorkspaceService, Customer, WorkspaceData, Collection } from "@/lib/services/guest-workspace-service";
+import { guestWorkspaceService, Customer, WorkspaceData, Collection, CollectionLine } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/download-customer-image";
 import { validateMobileNumber } from "@/lib/auth-validation";
@@ -167,6 +169,7 @@ function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [extendingCustomer, setExtendingCustomer] = useState<Customer | null>(null);
+  const [reassigningCustomer, setReassigningCustomer] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
@@ -180,6 +183,35 @@ function CustomersPage() {
   const handleReconfigureClick = () => {
     setEditingDays(true);
     setDraftDays(configuredDays.length > 0 ? configuredDays : ["monday"]);
+  };
+
+  // Line / Route State
+  const [lines, setLines] = useState<CollectionLine[]>([]);
+  const [selectedLine, setSelectedLine] = useState<string>("all");
+  const [selectedPortion, setSelectedPortion] = useState<string>("all");
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
+
+  const loadLines = async () => {
+    try {
+      const data = await guestWorkspaceService.getLines();
+      const loadedLines = data || [];
+      setLines(loadedLines);
+
+      // Auto-select line that includes today's current day of the week by default
+      const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      const lineForToday = loadedLines.find((ln) =>
+        ln.day_schedules?.some((s) => s.day_of_week.toLowerCase() === currentDayName)
+      );
+
+      if (lineForToday) {
+        setSelectedLine(lineForToday.public_id);
+      } else if (loadedLines.length > 0) {
+        setSelectedLine(loadedLines[0].public_id);
+      }
+    } catch (err) {
+      console.error("Failed to load lines:", err);
+    }
   };
 
   const loadWorkspace = async () => {
@@ -202,6 +234,8 @@ function CustomersPage() {
         search: q || undefined,
         status: status === "all" ? undefined : status,
         collection_day: selectedDay === "all" ? undefined : selectedDay,
+        line: selectedLine === "all" ? undefined : selectedLine,
+        portion: selectedPortion === "all" ? undefined : selectedPortion,
       });
       setCustomers(res.data || []);
     } catch (err) {
@@ -213,11 +247,12 @@ function CustomersPage() {
 
   useEffect(() => {
     loadWorkspace();
+    loadLines();
   }, []);
 
   useEffect(() => {
     loadCustomers();
-  }, [q, status, selectedDay]);
+  }, [q, status, selectedDay, selectedLine, selectedPortion]);
 
   const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const isDaysSaved = configuredDays.length > 0;
@@ -492,124 +527,164 @@ function CustomersPage() {
         </Card>
       </div>
 
-      {/* 1. Collection Days Plan Configuration Card */}
-      <Card className={`p-5 transition-all border-2 ${!isDaysSaved ? "border-amber-500/50 bg-amber-500/5 shadow-md" : "border-border bg-card"}`}>
+      {/* 1. Current Week Activity & Configured Collection Lines Card */}
+      <Card className="p-4 bg-card border-border shadow-xs space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-lg ${!isDaysSaved ? "bg-amber-500 text-white" : "bg-primary/10 text-primary"}`}>
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
               <Calendar className="size-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold">Workspace Collection Days Configuration</h3>
+                <h3 className="text-base font-bold">Current Week Activity & Configured Lines</h3>
                 <Badge variant={workspace?.subscription_plan === "premium" ? "default" : "secondary"} className="capitalize text-[10px]">
-                  {workspace?.subscription_plan || "Free"} Plan ({maxAllowedDays} Day{maxAllowedDays > 1 ? "s" : ""} Max)
+                  {lines.length} Line{lines.length !== 1 ? "s" : ""} Configured
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {!isDaysSaved
-                  ? "Select and save your weekly collection day(s) based on your plan to unlock adding customers."
-                  : `Your workspace is configured for ${configuredDays.length} collection day(s).`}
+                View your active collection routes, day time slots (Morning 1am–1pm / Afternoon 1pm–12am), and weekly borrower schedules.
               </p>
             </div>
           </div>
 
-          {isDaysSaved && !editingDays && (
-            <Button variant="outline" size="sm" onClick={handleReconfigureClick}>
-              <Edit3 className="size-3.5 mr-1" /> Re-configure Days
+          <div className="flex items-center gap-2">
+            <Select value={selectedPortion} onValueChange={setSelectedPortion}>
+              <SelectTrigger className="h-8 text-xs w-40 bg-background">
+                <SelectValue placeholder="All Time Slots" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time Slots</SelectItem>
+                <SelectItem value="morning">🌅 Morning (1am–1pm)</SelectItem>
+                <SelectItem value="afternoon">🌆 Afternoon (1pm–12am)</SelectItem>
+                <SelectItem value="both">☀️ Full Day</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLineToEdit(null);
+                setIsLineModalOpen(true);
+              }}
+              className="h-8 px-2.5 text-xs font-semibold gap-1 bg-background"
+            >
+              <Plus className="size-3.5 text-primary" /> Manage / Add Line
             </Button>
-          )}
+          </div>
         </div>
 
-        {daysError && (
-          <div className="mt-3 p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2">
-            <ShieldAlert className="size-4 shrink-0" /> {daysError}
-          </div>
-        )}
-
-        {/* Days Configuration UI */}
-        {editingDays ? (
-          <div className="pt-4 space-y-4">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-foreground">
-                Select your collection day(s) ({draftDays.length}/{maxAllowedDays} selected):
-              </span>
-              {workspace?.subscription_plan === "free" && (
-                <span className="text-amber-600 font-medium text-[11px]">
-                  Free plan allows 1 collection day. Upgrade to Premium for all 7 days!
+        {/* Lines & Assigned Portions Overview Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+          {lines.map((ln) => (
+            <div
+              key={ln.public_id}
+              onClick={() => {
+                const nextLine = selectedLine === ln.public_id ? "all" : ln.public_id;
+                setSelectedLine(nextLine);
+                setSelectedDay("all");
+              }}
+              className={`p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-1.5 ${
+                selectedLine === ln.public_id
+                  ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
+                  : "bg-muted/30 hover:bg-muted/60 border-border"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-primary" /> {ln.name}
                 </span>
-              )}
-            </div>
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30 font-bold">
+                    <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
+                  </Badge>
+                  {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+                </div>
+              </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-              {ALL_DAYS_LIST.map((d) => {
-                const isSelected = draftDays.includes(d.key);
-                return (
-                  <button
-                    key={d.key}
-                    type="button"
-                    onClick={() => handleToggleDraftDay(d.key)}
-                    className={`py-2.5 px-3 text-xs font-bold rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${isSelected
-                      ? "bg-primary text-primary-foreground border-primary shadow-md scale-[1.03]"
-                      : "bg-background text-muted-foreground hover:text-foreground border-border hover:border-primary/40"
-                      }`}
+              <div className="flex flex-wrap gap-1 pt-1">
+                {ln.day_schedules?.map((sched) => (
+                  <Badge
+                    key={sched.day_of_week}
+                    variant="secondary"
+                    className="text-[10px] capitalize px-1.5 py-0.5 font-medium border"
                   >
-                    <span className={`size-2 rounded-full ${isSelected ? "bg-primary-foreground" : "bg-muted-foreground/30"}`} />
-                    {d.label}
-                  </button>
-                );
-              })}
+                    {sched.day_of_week.slice(0, 3)}: {sched.portion === "morning" ? "🌅 Morn" : sched.portion === "afternoon" ? "🌆 Aft" : "☀️ Full"}
+                  </Badge>
+                ))}
+              </div>
             </div>
+          ))}
+        </div>
 
-            <div className="flex justify-end gap-2 pt-1">
-              {isDaysSaved && (
-                <Button variant="ghost" size="sm" onClick={() => setEditingDays(false)}>
-                  Cancel
-                </Button>
-              )}
-              <Button size="sm" onClick={handleSaveCollectionDays} disabled={savingDays}>
-                <Save className="size-4 mr-1.5" />
-                {savingDays ? "Saving..." : "Save Collection Days & Unlock Customers"}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          /* Saved Days Tab Selector */
-          <div className="pt-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedDay("all")}
-                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedDay === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border"
-                  }`}
-              >
-                All Configured Days ({configuredDays.length})
-              </button>
+        {/* Assigned Route Days & Time Slots of Selected Line */}
+        <div className="pt-2 border-t border-border/40 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground mr-1">
+            {selectedLine === "all" ? "All Route Schedules:" : "Assigned Days for Selected Line:"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedDay("all")}
+            className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
+              selectedDay === "all"
+                ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                : "bg-background text-muted-foreground hover:text-foreground border-border"
+            }`}
+          >
+            {selectedLine === "all" ? "All Days (All Routes)" : "All Days in this Route"}
+          </button>
 
-              {configuredDays.map((dKey) => {
-                const dayObj = ALL_DAYS_LIST.find((d) => d.key === dKey);
-                const isSelected = selectedDay === dKey;
-                return (
-                  <button
-                    key={dKey}
-                    type="button"
-                    onClick={() => setSelectedDay(dKey)}
-                    className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${isSelected
-                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+          {(() => {
+            const currentLineObj = lines.find((l) => l.public_id === selectedLine);
+            const scheds = selectedLine === "all"
+              ? lines.flatMap((l) => l.day_schedules || [])
+              : currentLineObj?.day_schedules || [];
+
+            if (scheds.length === 0) {
+              return <span className="text-xs text-muted-foreground italic">No assigned days for this route line.</span>;
+            }
+
+            return scheds.map((sched, idx) => {
+              const isSelected = selectedDay === sched.day_of_week.toLowerCase();
+              const portionLabel =
+                sched.portion === "morning"
+                  ? "🌅 Morning (1am–1pm)"
+                  : sched.portion === "afternoon"
+                  ? "🌆 Afternoon (1pm–12am)"
+                  : "☀️ Full Day";
+
+              return (
+                <button
+                  key={`${sched.day_of_week}-${idx}`}
+                  type="button"
+                  onClick={() => setSelectedDay(isSelected ? "all" : sched.day_of_week.toLowerCase())}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
                       : "bg-background text-muted-foreground hover:text-foreground border-border"
-                      }`}
-                  >
-                    <CheckCircle2 className={`size-3.5 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
-                    {dayObj?.label || dKey}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                  }`}
+                >
+                  <CheckCircle2 className={`size-3 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
+                  <span>{sched.day_of_week}</span>
+                  <span className={`text-[10px] px-1 rounded ${isSelected ? "bg-primary-foreground/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {portionLabel}
+                  </span>
+                </button>
+              );
+            });
+          })()}
+        </div>
       </Card>
+
+      <LineSetupDialog
+        open={isLineModalOpen}
+        onOpenChange={setIsLineModalOpen}
+        lineToEdit={lineToEdit}
+        onSuccess={() => {
+          loadLines();
+          loadCustomers();
+        }}
+      />
 
       {/* 2. Customer List Header & Action Bar */}
       <Card>
@@ -749,6 +824,14 @@ function CustomersPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setReassigningCustomer(c)}
+                    className="h-8 px-2.5 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10 gap-1"
+                  >
+                    <RefreshCw className="size-3.5" /> Re-assign Route
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setEditingCustomer(c)}
                     className="h-8 px-3 text-xs font-semibold"
                   >
@@ -776,7 +859,7 @@ function CustomersPage() {
                 <TableHead>Customer Code & Name</TableHead>
                 <TableHead>Mobile Number</TableHead>
                 <TableHead>Disbursal Date</TableHead>
-                <TableHead>Collection Day</TableHead>
+                <TableHead>Collection Day & Line Route</TableHead>
                 <TableHead>Loan Amount</TableHead>
                 <TableHead>Total Due</TableHead>
                 <TableHead>Outstanding Balance</TableHead>
@@ -825,9 +908,16 @@ function CustomersPage() {
                       {formatDate(c.start_date)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="font-mono text-[11px] capitalize bg-primary/5 text-primary border-primary/20">
-                        {c.collection_day || "monday"}
-                      </Badge>
+                      <div className="space-y-0.5">
+                        <Badge variant="outline" className="font-mono text-[11px] capitalize bg-primary/5 text-primary border-primary/20">
+                          {c.collection_day || "monday"}
+                        </Badge>
+                        {c.line_name && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <MapPin className="size-3 text-primary shrink-0" /> {c.line_name}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-semibold">{inr(c.loan_amount)}</TableCell>
                     <TableCell>{inr(c.total_due)}</TableCell>
@@ -848,6 +938,15 @@ function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReassigningCustomer(c)}
+                          className="h-8 px-2 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary gap-1"
+                          title="Re-assign Route Line / Day / Time Slot"
+                        >
+                          <RefreshCw className="size-3.5" /> Re-assign
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -881,6 +980,18 @@ function CustomersPage() {
           </Table>
         </div>
       </Card>
+
+      {/* Re-assign Route Line & Day Portion Modal */}
+      <ReassignRouteDialog
+        open={Boolean(reassigningCustomer)}
+        onOpenChange={(v) => !v && setReassigningCustomer(null)}
+        customer={reassigningCustomer}
+        lines={lines}
+        onSuccess={() => {
+          loadCustomers();
+          loadLines();
+        }}
+      />
 
       {/* Borrower Profile & Payment Details Modal */}
       {viewingCustomer && (
@@ -973,12 +1084,14 @@ function NewCustomerModal({
   setOpen,
   configuredDays = ["monday"],
   defaultDay = "monday",
+  lines = [],
 }: {
   onSuccess: (day?: string) => void;
   open: boolean;
   setOpen: (v: boolean) => void;
   configuredDays?: string[];
   defaultDay?: string;
+  lines?: CollectionLine[];
 }) {
   const [isExistingBorrower, setIsExistingBorrower] = useState(false);
   const [sequenceNumber, setSequenceNumber] = useState<number | "">("");
@@ -988,6 +1101,37 @@ function NewCustomerModal({
   const [disbursedAmount, setDisbursedAmount] = useState(48000);
   const [interestRate, setInterestRate] = useState(20);
   const [collectionDay, setCollectionDay] = useState(defaultDay);
+  const [selectedLineId, setSelectedLineId] = useState<string>("");
+  const [selectedPortion, setSelectedPortion] = useState<"morning" | "afternoon" | "both">("both");
+
+  // Derived target line object and allowed days
+  const selectedLineObj = lines.find((l) => l.public_id === selectedLineId);
+  const allowedDaysForSelectedLine = ALL_DAYS_LIST.filter((dObj) => {
+    if (!selectedLineObj || !selectedLineObj.day_schedules || selectedLineObj.day_schedules.length === 0) {
+      return configuredDays.includes(dObj.key);
+    }
+    return selectedLineObj.day_schedules.some((s) => s.day_of_week.toLowerCase() === dObj.key);
+  });
+
+  // When selected line changes, ensure valid day
+  useEffect(() => {
+    if (allowedDaysForSelectedLine.length > 0) {
+      const dayExists = allowedDaysForSelectedLine.some((d) => d.key === collectionDay.toLowerCase());
+      if (!dayExists) {
+        setCollectionDay(allowedDaysForSelectedLine[0].key);
+      }
+    }
+  }, [selectedLineId]);
+
+  // Auto-set portion for selected day on chosen line
+  useEffect(() => {
+    const sched = selectedLineObj?.day_schedules?.find(
+      (s) => s.day_of_week.toLowerCase() === collectionDay.toLowerCase()
+    );
+    if (sched?.portion) {
+      setSelectedPortion(sched.portion as any);
+    }
+  }, [selectedLineId, collectionDay]);
 
   // Installments state
   const [totalInstallmentsInput, setTotalInstallmentsInput] = useState(100);
@@ -1142,6 +1286,8 @@ function NewCustomerModal({
         interest_rate: interestRate,
         collection_frequency: selectedFreq,
         collection_day: collectionDay,
+        line: selectedLineId || undefined,
+        portion: selectedPortion,
         interest_type: selectedInterestType,
         start_date: startDate,
         is_existing_borrower: isExistingBorrower,
@@ -1263,20 +1409,63 @@ function NewCustomerModal({
             </div>
           </div>
 
+          {/* Collection Line & Time Slot Portion */}
+          {lines.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium">Collection Line (Route)</label>
+                <Select value={selectedLineId} onValueChange={setSelectedLineId}>
+                  <SelectTrigger className="mt-1 font-medium"><SelectValue placeholder="Select Route Line" /></SelectTrigger>
+                  <SelectContent>
+                    {lines.map((ln) => (
+                      <SelectItem key={ln.public_id} value={ln.public_id}>
+                        {ln.name} {ln.area ? `(${ln.area})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium">Day Time Slot Portion</label>
+                <Select value={selectedPortion} onValueChange={(v) => setSelectedPortion(v as any)}>
+                  <SelectTrigger className="mt-1 font-medium"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const sched = selectedLineObj?.day_schedules?.find(
+                        (s) => s.day_of_week.toLowerCase() === collectionDay.toLowerCase()
+                      );
+                      const confPortion = sched?.portion || "both";
+                      if (confPortion === "morning") {
+                        return <SelectItem value="morning">🌅 Morning Only (1am–1pm)</SelectItem>;
+                      }
+                      if (confPortion === "afternoon") {
+                        return <SelectItem value="afternoon">🌆 Afternoon Only (1pm–12am)</SelectItem>;
+                      }
+                      return (
+                        <>
+                          <SelectItem value="morning">🌅 Morning (1am–1pm)</SelectItem>
+                          <SelectItem value="afternoon">🌆 Afternoon (1pm–12am)</SelectItem>
+                          <SelectItem value="both">☀️ Full Day</SelectItem>
+                        </>
+                      );
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium">Assigned Collection Day *</label>
               <Select value={collectionDay} onValueChange={setCollectionDay}>
                 <SelectTrigger className="mt-1 font-semibold text-primary"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {configuredDays.map((dKey) => {
-                    const dayObj = ALL_DAYS_LIST.find((d) => d.key === dKey);
-                    return (
-                      <SelectItem key={dKey} value={dKey} className="capitalize font-medium">
-                        {dayObj?.label || dKey}
-                      </SelectItem>
-                    );
-                  })}
+                  {allowedDaysForSelectedLine.map((dayObj) => (
+                    <SelectItem key={dayObj.key} value={dayObj.key} className="capitalize font-medium">
+                      {dayObj.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

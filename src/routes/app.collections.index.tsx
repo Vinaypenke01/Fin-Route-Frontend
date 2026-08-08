@@ -9,13 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inr } from "@/lib/utils";
-import { guestWorkspaceService, Collection, Customer, WorkspaceData } from "@/lib/services/guest-workspace-service";
+import { guestWorkspaceService, Collection, Customer, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
 import { DailyCashReconciliationCard } from "@/components/daily-cash-reconciliation-card";
+import { LineSetupDialog } from "@/components/line-setup-dialog";
 import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loaders";
 
 export const Route = createFileRoute("/app/collections/")({
@@ -250,6 +251,33 @@ function CollectionsPage() {
     if (!dateFrom && !dateTo) return "All Time";
     if (dateFrom === dateTo) return dateFrom === today ? "Today" : formatFilterDate(dateFrom);
     return `${formatFilterDate(dateFrom)} to ${formatFilterDate(dateTo)}`;
+  };  // Line / Route State
+  const [lines, setLines] = useState<CollectionLine[]>([]);
+  const [selectedLine, setSelectedLine] = useState<string>("all");
+  const [selectedPortion, setSelectedPortion] = useState<string>("all");
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
+
+  const loadLines = async () => {
+    try {
+      const data = await guestWorkspaceService.getLines();
+      const loadedLines = data || [];
+      setLines(loadedLines);
+
+      // Auto-select line that includes today's current day of the week by default
+      const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      const lineForToday = loadedLines.find((ln) =>
+        ln.day_schedules?.some((s) => s.day_of_week.toLowerCase() === currentDayName)
+      );
+
+      if (lineForToday) {
+        setSelectedLine(lineForToday.public_id);
+      } else if (loadedLines.length > 0) {
+        setSelectedLine(loadedLines[0].public_id);
+      }
+    } catch (err) {
+      console.error("Failed to load lines:", err);
+    }
   };
 
   const loadWorkspaceAndData = async () => {
@@ -277,7 +305,13 @@ function CollectionsPage() {
   const loadCollections = async () => {
     setLoadingCollections(true);
     try {
-      const res = await guestWorkspaceService.getCollections({ page_size: 1000 });
+      const res = await guestWorkspaceService.getCollections({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        line: selectedLine === "all" ? undefined : selectedLine,
+        portion: selectedPortion === "all" ? undefined : selectedPortion,
+        page_size: 1000,
+      });
       setCollections(res.data || []);
     } catch (err) {
       console.error("Failed to load collections:", err);
@@ -286,12 +320,23 @@ function CollectionsPage() {
     }
   };
 
+  useEffect(() => {
+    loadWorkspaceAndData();
+    loadLines();
+  }, []);
+
+  useEffect(() => {
+    loadCollections();
+  }, [dateFrom, dateTo, selectedLine, selectedPortion]);
+
   const loadRouteCustomers = async () => {
     setLoadingCustomers(true);
     try {
       const res = await guestWorkspaceService.getCustomers({
         status: "active",
         collection_day: selectedDay === "all" ? undefined : selectedDay,
+        line: selectedLine === "all" ? undefined : selectedLine,
+        portion: selectedPortion === "all" ? undefined : selectedPortion,
       });
       setRouteCustomers(res.data || []);
     } catch (err) {
@@ -302,13 +347,8 @@ function CollectionsPage() {
   };
 
   useEffect(() => {
-    loadWorkspaceAndData();
-    loadCollections();
-  }, []);
-
-  useEffect(() => {
     loadRouteCustomers();
-  }, [selectedDay]);
+  }, [selectedDay, selectedLine, selectedPortion]);
 
   const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const isSingleDayPlan = configuredDays.length === 1;
@@ -433,8 +473,8 @@ function CollectionsPage() {
       {/* 0. Daily Cash Flow & Reconciliation Card */}
       <DailyCashReconciliationCard date={selectedDate} onRefresh={loadCollections} />
 
-      {/* 1. Collection Day Selection Header Card */}
-      <Card className="p-4 space-y-3 bg-card border-border shadow-sm">
+      {/* 1. Current Week Activity & Configured Collection Lines Card */}
+      <Card className="p-4 bg-card border-border shadow-xs space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-primary/10 text-primary">
@@ -442,68 +482,156 @@ function CollectionsPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold">Collection Route Day Selection</h3>
+                <h3 className="text-base font-bold">Current Week Activity & Collection Lines</h3>
                 <Badge variant={workspace?.subscription_plan === "premium" ? "default" : "secondary"} className="capitalize text-[10px]">
-                  {workspace?.subscription_plan || "Free"} Plan ({maxAllowedDays} Day{maxAllowedDays > 1 ? "s" : ""} Allowed)
+                  {lines.length} Line{lines.length !== 1 ? "s" : ""} Active
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {isSingleDayPlan
-                  ? `Your workspace is configured for 1 collection day (${configuredDays[0]?.toUpperCase()}). Displaying customer list for ${configuredDays[0]?.toUpperCase()}.`
-                  : configuredDays.length > 1
-                    ? "Select a day below to view that day's active customers list and record collections."
-                    : "Please configure your collection days on the Customers page first."}
+                Select active route line & time slot portion (Morning 1am–1pm / Afternoon 1pm–12am) to record collections.
               </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Select value={selectedPortion} onValueChange={setSelectedPortion}>
+              <SelectTrigger className="h-8 text-xs w-40 bg-background">
+                <SelectValue placeholder="All Time Slots" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time Slots</SelectItem>
+                <SelectItem value="morning">🌅 Morning (1am–1pm)</SelectItem>
+                <SelectItem value="afternoon">🌆 Afternoon (1pm–12am)</SelectItem>
+                <SelectItem value="both">☀️ Full Day</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setLineToEdit(null);
+                setIsLineModalOpen(true);
+              }}
+              className="h-8 px-2.5 text-xs font-semibold gap-1 bg-background"
+            >
+              <Plus className="size-3.5 text-primary" /> + Add Line / Route
+            </Button>
+          </div>
         </div>
 
-        {!isDaysSaved ? (
-          <div className="p-3 text-xs text-amber-800 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
-            <Lock className="size-4 shrink-0 text-amber-600" />
-            <span>No collection days configured yet. Please set your operational collection day(s) under Customers settings.</span>
-          </div>
-        ) : isSingleDayPlan ? (
-          <div className="flex items-center gap-2 pt-1">
-            <div className="px-4 py-2 text-xs font-bold rounded-lg bg-primary text-primary-foreground flex items-center gap-2 shadow-sm">
-              <CheckCircle2 className="size-4 text-primary-foreground" />
-              Active Route Day: <span className="capitalize">{configuredDays[0]}</span>
-            </div>
-            <span className="text-xs text-muted-foreground">(Single collection day assigned to your workspace)</span>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setSelectedDay("all")}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedDay === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border"
-                }`}
+        {/* Lines Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+          {lines.map((ln) => (
+            <div
+              key={ln.public_id}
+              onClick={() => {
+                const nextLine = selectedLine === ln.public_id ? "all" : ln.public_id;
+                setSelectedLine(nextLine);
+                setSelectedDay("all");
+              }}
+              className={`p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-1.5 ${
+                selectedLine === ln.public_id
+                  ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
+                  : "bg-muted/30 hover:bg-muted/60 border-border"
+              }`}
             >
-              All Configured Days ({configuredDays.length})
-            </button>
-            {configuredDays.map((dKey) => {
-              const dayObj = ALL_DAYS_LIST.find((d) => d.key === dKey);
-              const isSelected = selectedDay === dKey;
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-primary" /> {ln.name}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30 font-bold">
+                    <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
+                  </Badge>
+                  {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1 pt-1">
+                {ln.day_schedules?.map((sched) => (
+                  <Badge
+                    key={sched.day_of_week}
+                    variant="secondary"
+                    className="text-[10px] capitalize px-1.5 py-0.5 font-medium border"
+                  >
+                    {sched.day_of_week.slice(0, 3)}: {sched.portion === "morning" ? "🌅 Morn" : sched.portion === "afternoon" ? "🌆 Aft" : "☀️ Full"}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Assigned Route Days & Time Slots of Selected Line */}
+        <div className="pt-2 border-t border-border/40 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground mr-1">
+            {selectedLine === "all" ? "All Route Schedules:" : "Assigned Days for Selected Line:"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedDay("all")}
+            className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
+              selectedDay === "all"
+                ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                : "bg-background text-muted-foreground hover:text-foreground border-border"
+            }`}
+          >
+            {selectedLine === "all" ? "All Days (All Routes)" : "All Days in this Route"}
+          </button>
+
+          {(() => {
+            const currentLineObj = lines.find((l) => l.public_id === selectedLine);
+            const scheds = selectedLine === "all"
+              ? lines.flatMap((l) => l.day_schedules || [])
+              : currentLineObj?.day_schedules || [];
+
+            if (scheds.length === 0) {
+              return <span className="text-xs text-muted-foreground italic">No assigned days for this route line.</span>;
+            }
+
+            return scheds.map((sched, idx) => {
+              const isSelected = selectedDay === sched.day_of_week.toLowerCase();
+              const portionLabel =
+                sched.portion === "morning"
+                  ? "🌅 Morning (1am–1pm)"
+                  : sched.portion === "afternoon"
+                  ? "🌆 Afternoon (1pm–12am)"
+                  : "☀️ Full Day";
+
               return (
                 <button
-                  key={dKey}
+                  key={`${sched.day_of_week}-${idx}`}
                   type="button"
-                  onClick={() => setSelectedDay(dKey)}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${isSelected
-                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  onClick={() => setSelectedDay(isSelected ? "all" : sched.day_of_week.toLowerCase())}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 capitalize ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
                       : "bg-background text-muted-foreground hover:text-foreground border-border"
-                    }`}
+                  }`}
                 >
-                  <CheckCircle2 className={`size-3.5 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
-                  {dayObj?.label || dKey}
+                  <CheckCircle2 className={`size-3 ${isSelected ? "text-primary-foreground" : "text-emerald-500"}`} />
+                  <span>{sched.day_of_week}</span>
+                  <span className={`text-[10px] px-1 rounded ${isSelected ? "bg-primary-foreground/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {portionLabel}
+                  </span>
                 </button>
               );
-            })}
-          </div>
-        )}
+            });
+          })()}
+        </div>
       </Card>
+
+      <LineSetupDialog
+        open={isLineModalOpen}
+        onOpenChange={setIsLineModalOpen}
+        lineToEdit={lineToEdit}
+        onSuccess={() => {
+          loadLines();
+          loadCollections();
+          loadRouteCustomers();
+        }}
+      />
 
       {/* 2. Date Range & Preset Filter Bar */}
       <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">

@@ -40,7 +40,11 @@ function ExpensesPage() {
   const loadExpenses = async () => {
     setLoading(true);
     try {
-      const res = await guestWorkspaceService.getExpenses({ page_size: 1000 });
+      const res = await guestWorkspaceService.getExpenses({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        page_size: 1000,
+      });
       setExpenses(res.data || []);
     } catch (err) {
       console.error("Failed to load expenses:", err);
@@ -51,7 +55,7 @@ function ExpensesPage() {
 
   useEffect(() => {
     loadExpenses();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const handlePresetToday = () => {
     const t = getTodayStr();

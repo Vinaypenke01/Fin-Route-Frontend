@@ -67,8 +67,16 @@ function DashboardPage() {
       const [dashData, weeklyData, colRes, expRes] = await Promise.all([
         guestWorkspaceService.getDashboardData(),
         guestWorkspaceService.getWeeklySummary(),
-        guestWorkspaceService.getCollections({ page_size: 1000 }),
-        guestWorkspaceService.getExpenses({ page_size: 1000 }),
+        guestWorkspaceService.getCollections({
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          page_size: 1000,
+        }),
+        guestWorkspaceService.getExpenses({
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          page_size: 1000,
+        }),
       ]);
       setMetrics(dashData.metrics);
       setRecentCollections(dashData.recent_collections);
@@ -84,7 +92,7 @@ function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   // Quick Preset Handlers
   const handlePresetToday = () => {

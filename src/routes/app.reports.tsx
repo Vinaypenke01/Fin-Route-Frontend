@@ -68,8 +68,16 @@ function ReportsPage() {
     setLoading(true);
     try {
       const [colRes, expRes, custRes, ws] = await Promise.all([
-        guestWorkspaceService.getCollections({ page_size: 1000 }),
-        guestWorkspaceService.getExpenses({ page_size: 1000 }),
+        guestWorkspaceService.getCollections({
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          page_size: 1000,
+        }),
+        guestWorkspaceService.getExpenses({
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          page_size: 1000,
+        }),
         guestWorkspaceService.getCustomers({ status: "active", page_size: 1000 }),
         guestWorkspaceService.getWorkspace(),
       ]);
@@ -89,7 +97,7 @@ function ReportsPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const dynamicDaysList = useMemo(() => {
     if (!configuredDays || configuredDays.length === 0) {

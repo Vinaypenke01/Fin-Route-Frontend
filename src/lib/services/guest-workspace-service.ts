@@ -91,6 +91,21 @@ export interface CashReconciliation {
   is_cash_deficit: boolean;
 }
 
+export interface LineDaySchedule {
+  day_of_week: string;
+  portion: "morning" | "afternoon" | "both";
+}
+
+export interface CollectionLine {
+  public_id: string;
+  name: string;
+  area?: string;
+  is_active?: boolean;
+  customers_count?: number;
+  day_schedules?: LineDaySchedule[];
+  created_at?: string;
+}
+
 export interface Customer {
   public_id: string;
   customer_code: string;
@@ -113,6 +128,10 @@ export interface Customer {
   collection_frequency: number;
   collection_frequency_name?: string;
   collection_day?: string;
+  line?: string | null;
+  line_public_id?: string | null;
+  line_name?: string | null;
+  portion?: "morning" | "afternoon" | "both";
   interest_type: number;
   interest_type_name?: string;
   is_existing_borrower?: boolean;
@@ -134,6 +153,9 @@ export interface Collection {
   customer_code: string;
   customer_name: string;
   customer_public_id: string;
+  line_public_id?: string | null;
+  line_name?: string | null;
+  portion?: "morning" | "afternoon" | "both";
   total_installments?: number;
   installments_paid_count?: number;
   remaining_installments_count?: number;
@@ -212,7 +234,7 @@ export const guestWorkspaceService = {
   },
 
   // ─── Customers ─────────────────────────────────────────────────────────────
-  async getCustomers(params?: { search?: string; status?: string; frequency?: string; collection_day?: string; page?: number; page_size?: number }) {
+  async getCustomers(params?: { search?: string; status?: string; frequency?: string; collection_day?: string; line?: string; portion?: string; page?: number; page_size?: number }) {
     const cleanedParams: Record<string, string> = {};
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
@@ -256,8 +278,16 @@ export const guestWorkspaceService = {
   },
 
   // ─── Collections ───────────────────────────────────────────────────────────
-  async getCollections(params?: { date_from?: string; date_to?: string; customer?: string; status?: string; page?: number; page_size?: number }) {
-    const query = new URLSearchParams(params as any).toString();
+  async getCollections(params?: { date_from?: string; date_to?: string; customer?: string; status?: string; line?: string; portion?: string; page?: number; page_size?: number }) {
+    const cleanedParams: Record<string, string> = {};
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "" && v !== "all") {
+          cleanedParams[k] = String(v);
+        }
+      });
+    }
+    const query = new URLSearchParams(cleanedParams).toString();
     const res = await apiRequest<Collection[]>(`/app/collections/${query ? `?${query}` : ""}`);
     return res;
   },
@@ -312,7 +342,15 @@ export const guestWorkspaceService = {
 
   // ─── Expenses ──────────────────────────────────────────────────────────────
   async getExpenses(params?: { date_from?: string; date_to?: string; category?: string; page?: number; page_size?: number }) {
-    const query = new URLSearchParams(params as any).toString();
+    const cleanedParams: Record<string, string> = {};
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "" && v !== "all") {
+          cleanedParams[k] = String(v);
+        }
+      });
+    }
+    const query = new URLSearchParams(cleanedParams).toString();
     const res = await apiRequest<Expense[]>(`/app/expenses/${query ? `?${query}` : ""}`);
     return res;
   },
@@ -351,16 +389,7 @@ export const guestWorkspaceService = {
     return res.data;
   },
 
-  /**
-   * Update workspace details (name, gstin, business_type, owner_pan, address, city, state, pin_code).
-   */
-  async updateWorkspace(data: Partial<WorkspaceData>): Promise<WorkspaceData> {
-    const res = await apiRequest<WorkspaceData>("/app/workspace/", {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-    return res.data;
-  },
+
 
   // ─── Upgrade & Plans ───────────────────────────────────────────────────────
   async getUpgradePlans(): Promise<UpgradePlansResponse> {
@@ -444,5 +473,53 @@ export const guestWorkspaceService = {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  // ─── Lines (Routes) ────────────────────────────────────────────────────────
+  async getLines(): Promise<CollectionLine[]> {
+    const res = await apiRequest<CollectionLine[]>("/app/lines/");
+    return res.data || [];
+  },
+
+  async getLineDetail(id: string): Promise<CollectionLine> {
+    const res = await apiRequest<CollectionLine>(`/app/lines/${id}/`);
+    return res.data;
+  },
+
+  async createLine(data: {
+    name: string;
+    area?: string;
+    schedules?: Array<{ day_of_week: string; portion: string }>;
+  }): Promise<CollectionLine> {
+    const res = await apiRequest<CollectionLine>("/app/lines/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  },
+
+  async updateLine(
+    id: string,
+    data: {
+      name?: string;
+      area?: string;
+      schedules?: Array<{ day_of_week: string; portion: string }>;
+    }
+  ): Promise<CollectionLine> {
+    const res = await apiRequest<CollectionLine>(`/app/lines/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  },
+
+  async deleteLine(id: string): Promise<void> {
+    await apiRequest(`/app/lines/${id}/`, { method: "DELETE" });
+  },
+
+  async getAvailablePortions(excludeLineId?: string): Promise<Record<string, string[]>> {
+    const query = excludeLineId ? `?exclude_line_id=${excludeLineId}` : "";
+    const res = await apiRequest<Record<string, string[]>>(`/app/lines/available-portions/${query}`);
+    return res.data;
   },
 };
