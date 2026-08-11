@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare, Image as ImageIcon, MapPin, Plus, RefreshCw, Users } from "lucide-react";
+import { Search, UserPlus, Download, Filter, Calculator, Sparkles, UserCheck, Edit3, Calendar, CheckCircle2, Lock, Save, ShieldAlert, Trash2, Eye, MessageSquare, Image as ImageIcon, MapPin, Plus, RefreshCw, Users, Pencil } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { BorrowerProfileDetailsModal } from "@/components/borrower-profile-modal";
@@ -623,6 +623,44 @@ function CustomersPage() {
                       <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
                     </Badge>
                     {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+                    
+                    {/* Line Actions: Edit & Delete */}
+                    <div className="flex items-center gap-0.5 ml-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md"
+                        title="Edit Line"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLineToEdit(ln);
+                          setIsLineModalOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-md"
+                        title="Delete Line"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm(`Are you sure you want to delete line "${ln.name}"?`)) {
+                            try {
+                              await guestWorkspaceService.deleteLine(ln.public_id);
+                              await loadLines();
+                            } catch (err: any) {
+                              alert(err?.message || "Failed to delete line");
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
 

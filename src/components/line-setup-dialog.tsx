@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Calendar, Sun, Moon, Check, Plus, Loader2 } from "lucide-react";
+import { MapPin, Calendar, Sun, Moon, Check, Plus, Loader2, Trash2 } from "lucide-react";
 import { guestWorkspaceService, CollectionLine } from "@/lib/services/guest-workspace-service";
 
 interface LineSetupDialogProps {
@@ -31,6 +31,7 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
   const [availablePortions, setAvailablePortions] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +77,24 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
       }
       return { ...prev, [day]: portion };
     });
+  };
+
+  const handleDelete = async () => {
+    if (!lineToEdit) return;
+    if (!confirm(`Are you sure you want to delete collection line "${lineToEdit.name}"?`)) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await guestWorkspaceService.deleteLine(lineToEdit.public_id);
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete collection line.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -248,23 +267,41 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2 className="size-4 animate-spin mr-1.5" /> Saving...
-              </>
-            ) : lineToEdit ? (
-              "Save Line Updates"
-            ) : (
-              <>
-                <Plus className="size-4 mr-1.5" /> Create Line
-              </>
-            )}
-          </Button>
+        <DialogFooter className="flex items-center justify-between sm:justify-between w-full gap-2 pt-2 border-t">
+          {lineToEdit ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className="gap-1 font-semibold text-xs h-8"
+            >
+              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Delete Line
+            </Button>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving || deleting} className="h-8 text-xs">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || deleting} className="h-8 text-xs font-bold">
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin mr-1.5" /> Saving...
+                </>
+              ) : lineToEdit ? (
+                "Save Line Updates"
+              ) : (
+                <>
+                  <Plus className="size-3.5 mr-1.5" /> Create Line
+                </>
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

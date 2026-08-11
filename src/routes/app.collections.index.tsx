@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
@@ -569,6 +569,44 @@ function CollectionsPage() {
                       <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
                     </Badge>
                     {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+                    
+                    {/* Line Actions: Edit & Delete */}
+                    <div className="flex items-center gap-0.5 ml-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md"
+                        title="Edit Line"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLineToEdit(ln);
+                          setIsLineModalOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-md"
+                        title="Delete Line"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm(`Are you sure you want to delete line "${ln.name}"?`)) {
+                            try {
+                              await guestWorkspaceService.deleteLine(ln.public_id);
+                              await loadLines();
+                            } catch (err: any) {
+                              alert(err?.message || "Failed to delete line");
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
