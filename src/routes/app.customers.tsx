@@ -575,47 +575,72 @@ function CustomersPage() {
         </div>
 
         {/* Lines & Assigned Portions Overview Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-          {lines.map((ln) => (
-            <div
-              key={ln.public_id}
+        {lines.length === 0 ? (
+          <div className="p-6 text-center border-2 border-dashed border-primary/30 rounded-2xl bg-primary/5 space-y-3 my-2">
+            <div className="size-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <MapPin className="size-6" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h3 className="font-bold text-base text-foreground">No Collection Lines Configured Yet</h3>
+              <p className="text-xs text-muted-foreground">
+                Set up your market collection routes (lines), operating days, and time slot portions (Morning 1am–1pm / Afternoon 1pm–12am) to organize your borrowers.
+              </p>
+            </div>
+            <Button
+              type="button"
               onClick={() => {
-                const nextLine = selectedLine === ln.public_id ? "all" : ln.public_id;
-                setSelectedLine(nextLine);
-                setSelectedDay("all");
+                setLineToEdit(null);
+                setIsLineModalOpen(true);
               }}
-              className={`p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-1.5 ${
-                selectedLine === ln.public_id
-                  ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
-                  : "bg-muted/30 hover:bg-muted/60 border-border"
-              }`}
+              className="gap-1.5 font-bold shadow-md"
+              size="sm"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                  <MapPin className="size-3.5 text-primary" /> {ln.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30 font-bold">
-                    <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
-                  </Badge>
-                  {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+              <Plus className="size-4" /> Set Up Your First Collection Line
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+            {lines.map((ln) => (
+              <div
+                key={ln.public_id}
+                onClick={() => {
+                  const nextLine = selectedLine === ln.public_id ? "all" : ln.public_id;
+                  setSelectedLine(nextLine);
+                  setSelectedDay("all");
+                }}
+                className={`p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-1.5 ${
+                  selectedLine === ln.public_id
+                    ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
+                    : "bg-muted/30 hover:bg-muted/60 border-border"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                    <MapPin className="size-3.5 text-primary" /> {ln.name}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30 font-bold">
+                      <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
+                    </Badge>
+                    {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {ln.day_schedules?.map((sched) => (
+                    <Badge
+                      key={sched.day_of_week}
+                      variant="secondary"
+                      className="text-[10px] capitalize px-1.5 py-0.5 font-medium border"
+                    >
+                      {sched.day_of_week.slice(0, 3)}: {sched.portion === "morning" ? "🌅 Morn" : sched.portion === "afternoon" ? "🌆 Aft" : "☀️ Full"}
+                    </Badge>
+                  ))}
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-1 pt-1">
-                {ln.day_schedules?.map((sched) => (
-                  <Badge
-                    key={sched.day_of_week}
-                    variant="secondary"
-                    className="text-[10px] capitalize px-1.5 py-0.5 font-medium border"
-                  >
-                    {sched.day_of_week.slice(0, 3)}: {sched.portion === "morning" ? "🌅 Morn" : sched.portion === "afternoon" ? "🌆 Aft" : "☀️ Full"}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Assigned Route Days & Time Slots of Selected Line */}
         <div className="pt-2 border-t border-border/40 flex flex-wrap items-center gap-2">
