@@ -20,6 +20,7 @@ import { guestWorkspaceService, Customer, WorkspaceData, Collection, CollectionL
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/download-customer-image";
 import { validateMobileNumber } from "@/lib/auth-validation";
+import { exportCustomersToExcelWorkbook } from "@/lib/customer-export-utils";
 
 export const Route = createFileRoute("/app/customers")({
   head: () => ({ meta: [{ title: "Customers — FinRoute" }, { name: "description", content: "Manage your customers, loans and collection history." }] }),
@@ -322,172 +323,13 @@ function CustomersPage() {
   };
 
   const handleExportCSV = async () => {
-    if (!customers.length) {
-      alert("No borrower records available to export.");
-      return;
-    }
-
-    try {
-      // Fetch all collections to map exact installment dates & amounts for each borrower
-      const colRes = await guestWorkspaceService.getCollections({ page_size: 1000 });
-      const allCollections: Collection[] = colRes.data || [];
-
-      // Group collections by borrower (by public_id or customer_code)
-      const customerCollectionsMap: Record<string, Collection[]> = {};
-      allCollections.forEach((entry) => {
-        const isOpening = entry.remarks?.toLowerCase().includes("initial opening");
-        const isSkipped = entry.status_code === "skipped" || entry.status_name?.toLowerCase().includes("skipped");
-        if (isOpening || isSkipped) return;
-
-        const keys = [
-          entry.customer_public_id ? String(entry.customer_public_id).toLowerCase() : "",
-          entry.customer_code ? String(entry.customer_code).toLowerCase() : "",
-        ].filter(Boolean);
-
-        keys.forEach((key) => {
-          if (!customerCollectionsMap[key]) {
-            customerCollectionsMap[key] = [];
-          }
-          // Avoid duplicate entries if keyed by both ID and code
-          if (!customerCollectionsMap[key].some((e) => e.public_id === entry.public_id)) {
-            customerCollectionsMap[key].push(entry);
-          }
-        });
-      });
-
-      // Sort each borrower's collection history chronologically by date
-      Object.keys(customerCollectionsMap).forEach((k) => {
-        customerCollectionsMap[k].sort((a, b) => {
-          const dateA = a.collection_date || a.created_at || "";
-          const dateB = b.collection_date || b.created_at || "";
-          return dateA.localeCompare(dateB);
-        });
-      });
-
-      // Determine max installments paid by any borrower to build header columns
-      let maxInstallmentCount = 0;
-      customers.forEach((c) => {
-        const pId = String(c.public_id).toLowerCase();
-        const cCode = String(c.customer_code).toLowerCase();
-        const cList = customerCollectionsMap[pId] || customerCollectionsMap[cCode] || [];
-        if (cList.length > maxInstallmentCount) {
-          maxInstallmentCount = cList.length;
-        }
-      });
-      if (maxInstallmentCount < 1) maxInstallmentCount = 1;
-
-      // Base headers
-      const baseHeaders = [
-        "Seq #",
-        "Customer Code",
-        "Borrower Full Name",
-        "Mobile Number",
-        "Route Day",
-        "Principal Amount (Rs)",
-        "Interest Rate (%)",
-        "Total Due (Rs)",
-        "Amount Paid (Rs)",
-        "Outstanding Balance (Rs)",
-        "Per Installment Amount (Rs)",
-        "Collection Frequency",
-        "Total Installments",
-        "Paid Installments Count",
-        "Remaining Installments Count",
-        "Status",
-        "Start Date",
-        "End Date",
-        "Address",
-      ];
-
-      // Dynamic Installment Headers (Inst #1 Date, Inst #1 Amount, Inst #2 Date, Inst #2 Amount...)
-      const installmentHeaders: string[] = [];
-      for (let i = 1; i <= maxInstallmentCount; i++) {
-        installmentHeaders.push(`Inst #${i} Date`, `Inst #${i} Amount (Rs)`);
-      }
-
-      const headers = [...baseHeaders, ...installmentHeaders];
-      const csvRows = [headers.join(",")];
-
-      customers.forEach((c) => {
-        const pId = String(c.public_id).toLowerCase();
-        const cCode = String(c.customer_code).toLowerCase();
-        const cList = customerCollectionsMap[pId] || customerCollectionsMap[cCode] || [];
-
-        // Sum actual collections for this customer
-        const collectionSum = cList.reduce((sum, entry) => sum + Number(entry.collected_amount || 0), 0);
-
-        // Paid amount is maximum of collection records sum or customer's recorded amount_already_collected
-        const actualPaidAmount = Math.max(Number(c.amount_already_collected || 0), collectionSum);
-
-        const totalDue = Number(c.total_due || c.loan_amount || 0);
-        const actualOutstanding = Math.max(0, totalDue - actualPaidAmount);
-
-        const totalInst = c.total_installments || 0;
-        const paidInstCount = cList.length > 0 ? cList.length : (c.installments_paid_count || 0);
-        const remInstCount = Math.max(0, totalInst - paidInstCount);
-
-        // Clean mobile number for Excel so +91 is not treated as a math formula
-        const cleanMobile = c.mobile_number ? c.mobile_number.replace(/^\+91/, "").replace(/\D/g, "") : "";
-        const mobileCell = cleanMobile ? `="${cleanMobile}"` : '""';
-
-        // Interest rate calculation fallback if 0
-        let interestRate = c.interest_rate;
-        if (!interestRate && c.loan_amount && totalDue > c.loan_amount) {
-          interestRate = Number((((totalDue - c.loan_amount) / c.loan_amount) * 100).toFixed(1));
-        }
-
-        const baseRow = [
-          c.sequence_number || "",
-          `"${c.customer_code || ""}"`,
-          `"${(c.full_name || "").replace(/"/g, '""')}"`,
-          mobileCell,
-          `"${(c.collection_day || "").toUpperCase()}"`,
-          Number(c.loan_amount || 0).toFixed(2),
-          interestRate ? `${interestRate}%` : "0%",
-          totalDue.toFixed(2),
-          actualPaidAmount.toFixed(2),
-          actualOutstanding.toFixed(2),
-          Number(c.installment_amount || 0).toFixed(2),
-          `"${c.collection_frequency_name || c.collection_frequency || "Weekly"}"`,
-          totalInst,
-          paidInstCount,
-          remInstCount,
-          `"${(c.status || "active").toUpperCase()}"`,
-          `"${c.start_date || ""}"`,
-          `"${c.end_date || ""}"`,
-          `"${(c.address || "").replace(/"/g, '""')}"`,
-        ];
-
-        // Append individual installment dates & amounts
-        const installmentCells: string[] = [];
-        for (let i = 0; i < maxInstallmentCount; i++) {
-          const entry = cList[i];
-          if (entry) {
-            const instDate = entry.collection_date || (entry.created_at ? String(entry.created_at).slice(0, 10) : "");
-            const instAmt = Number(entry.collected_amount || 0).toFixed(2);
-            installmentCells.push(`"${instDate}"`, instAmt);
-          } else {
-            installmentCells.push('""', '""');
-          }
-        }
-
-        const fullRow = [...baseRow, ...installmentCells];
-        csvRows.push(fullRow.join(","));
-      });
-
-      const csvContent = csvRows.join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `FinRoute_Borrowers_${selectedDay}_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error("Export CSV error:", err);
-      alert("Failed to export CSV. Please try again.");
-    }
+    await exportCustomersToExcelWorkbook({
+      customers,
+      selectedLine,
+      selectedDay,
+      lines,
+      workspace,
+    });
   };
 
   const totalOutstanding = customers.reduce((sum, c) => sum + (Number(c.outstanding_balance) || 0), 0);

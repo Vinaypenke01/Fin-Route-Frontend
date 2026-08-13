@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Sparkles, ShieldCheck, Plus, Trash2, Users, UserPlus, Settings2, Calendar, Edit, Power, PowerOff, Ban, Eye } from "lucide-react";
+import { Sparkles, ShieldCheck, Plus, Minus, Trash2, Users, UserPlus, Settings2, Calendar, Edit, Edit3, Power, PowerOff, Ban, Eye } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { adminService, AdminWorkspace, SubscriptionPlanConfigItem } from "@/lib/services/admin-service";
 import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
@@ -63,6 +63,10 @@ function GuestPlanAdmin() {
 
   // Override, Edit & Details Modal State
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [daysActionMode, setDaysActionMode] = useState<"add" | "deduct" | "set">("add");
+  const [daysDeltaAmount, setDaysDeltaAmount] = useState<string>("1");
+  const [quotaActionMode, setQuotaActionMode] = useState<"add" | "deduct" | "set">("add");
+  const [customerDeltaAmount, setCustomerDeltaAmount] = useState<string>("10");
   const [overrideForm, setOverrideForm] = useState({ max_collection_days: "", max_customers: "" });
   const [selectedGuestDetail, setSelectedGuestDetail] = useState<AdminWorkspace | null>(null);
 
@@ -237,12 +241,37 @@ function GuestPlanAdmin() {
 
   const handleSaveOverride = async () => {
     if (!editingWorkspaceId) return;
+    const targetWs = workspaces.find((w) => w.public_id === editingWorkspaceId);
+    const currentDays = targetWs?.max_collection_days_override ?? targetWs?.max_collection_days ?? 1;
+    const daysDelta = Number(daysDeltaAmount || 0);
+
+    let finalMaxDays: number | null = null;
+    if (daysActionMode === "add") {
+      finalMaxDays = Math.min(7, currentDays + daysDelta);
+    } else if (daysActionMode === "deduct") {
+      finalMaxDays = Math.max(1, currentDays - daysDelta);
+    } else {
+      finalMaxDays = daysDelta > 0 ? Math.min(7, Math.max(1, daysDelta)) : null;
+    }
+
+    const currentCustomers = targetWs?.max_customers_override ?? targetWs?.max_customers ?? 100;
+    const customerDelta = Number(customerDeltaAmount || 0);
+
+    let finalMaxCustomers: number | null = null;
+    if (quotaActionMode === "add") {
+      finalMaxCustomers = currentCustomers + customerDelta;
+    } else if (quotaActionMode === "deduct") {
+      finalMaxCustomers = Math.max(1, currentCustomers - customerDelta);
+    } else {
+      finalMaxCustomers = customerDelta > 0 ? customerDelta : null;
+    }
+
     try {
       await adminService.setQuotaOverride(editingWorkspaceId, {
-        max_collection_days_override: overrideForm.max_collection_days ? Number(overrideForm.max_collection_days) : null,
-        max_customers_override: overrideForm.max_customers ? Number(overrideForm.max_customers) : null,
+        max_collection_days_override: finalMaxDays,
+        max_customers_override: finalMaxCustomers,
       });
-      toast.success("Guest Quota Override Saved");
+      toast.success(`Guest Quota Saved (${finalMaxDays} Collection Days/Wk, ${finalMaxCustomers} Borrowers Limit)`);
       setEditingWorkspaceId(null);
       await loadData();
     } catch (err: any) {
@@ -511,6 +540,10 @@ function GuestPlanAdmin() {
                         size="sm"
                         onClick={() => {
                           setEditingWorkspaceId(w.public_id);
+                          setDaysActionMode("add");
+                          setDaysDeltaAmount("1");
+                          setQuotaActionMode("add");
+                          setCustomerDeltaAmount("10");
                           setOverrideForm({
                             max_collection_days: w.max_collection_days_override ? String(w.max_collection_days_override) : "",
                             max_customers: w.max_customers_override ? String(w.max_customers_override) : "",
@@ -748,48 +781,203 @@ function GuestPlanAdmin() {
       <Dialog open={!!editingWorkspaceId} onOpenChange={() => setEditingWorkspaceId(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+            <DialogTitle className="flex items-center gap-2 text-emerald-700 font-bold">
               <Settings2 className="size-5" /> Set Custom Quota Override
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Grant custom collection day or customer limits for this specific guest workspace.
+              Adjust guest collection days and borrower count limits for this workspace.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            <div>
-              <Label className="text-xs font-semibold">Max Collection Days per Week</Label>
-              <Input
-                type="number"
-                min={1}
-                max={7}
-                placeholder="Leave blank for plan default"
-                className="mt-1 text-xs font-mono"
-                value={overrideForm.max_collection_days}
-                onChange={(e) => setOverrideForm({ ...overrideForm, max_collection_days: e.target.value })}
-              />
-            </div>
+          {(() => {
+            const editingWorkspaceObj = workspaces.find((w) => w.public_id === editingWorkspaceId);
+            const currentDays = editingWorkspaceObj?.max_collection_days_override ?? editingWorkspaceObj?.max_collection_days ?? 1;
+            const currentCustomers = editingWorkspaceObj?.max_customers_override ?? editingWorkspaceObj?.max_customers ?? 100;
 
-            <div>
-              <Label className="text-xs font-semibold">Max Customers Override</Label>
-              <Input
-                type="number"
-                placeholder="Leave blank for plan default"
-                className="mt-1 text-xs font-mono"
-                value={overrideForm.max_customers}
-                onChange={(e) => setOverrideForm({ ...overrideForm, max_customers: e.target.value })}
-              />
-            </div>
+            const daysDelta = Number(daysDeltaAmount || 0);
+            const customerDelta = Number(customerDeltaAmount || 0);
 
-            <DialogFooter className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditingWorkspaceId(null)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleSaveOverride} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                Save Override
-              </Button>
-            </DialogFooter>
-          </div>
+            return (
+              <div className="space-y-4 pt-2">
+                {/* 1. COLLECTION DAYS ADJUSTMENT (Add / Deduct / Set) */}
+                <div className="p-3 rounded-xl bg-muted/40 border border-border space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1.5">
+                      <Calendar className="size-4 text-emerald-600" /> Max Collection Days per Week
+                    </Label>
+                    <Badge variant="outline" className="font-mono font-bold text-xs bg-emerald-500/10 text-emerald-700 border-emerald-500/20">
+                      Current: {currentDays} Days/Wk
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-lg border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDaysActionMode("add")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        daysActionMode === "add"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Plus className="size-3.5" /> Add (+)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDaysActionMode("deduct")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        daysActionMode === "deduct"
+                          ? "bg-rose-600 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Minus className="size-3.5" /> Deduct (-)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDaysActionMode("set")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        daysActionMode === "set"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Edit3 className="size-3.5" /> Set (=)
+                    </button>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold text-muted-foreground">
+                      {daysActionMode === "add"
+                        ? "Number of Collection Days to ADD (+)"
+                        : daysActionMode === "deduct"
+                        ? "Number of Collection Days to DEDUCT (-)"
+                        : "Exact Collection Days Limit (=)"}
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="1"
+                      className="mt-1 text-sm font-mono font-bold h-9"
+                      value={daysDeltaAmount}
+                      onChange={(e) => setDaysDeltaAmount(e.target.value.replace(/\D/g, ""))}
+                    />
+                    <p className="text-[11px] mt-1 font-medium">
+                      {daysActionMode === "add" && (
+                        <span className="text-emerald-600 font-bold">
+                          Resulting Limit: {Math.min(7, currentDays + daysDelta)} Collection Days/Wk
+                        </span>
+                      )}
+                      {daysActionMode === "deduct" && (
+                        <span className="text-rose-600 font-bold">
+                          Resulting Limit: {Math.max(1, currentDays - daysDelta)} Collection Days/Wk
+                        </span>
+                      )}
+                      {daysActionMode === "set" && (
+                        <span className="text-primary font-bold">
+                          Resulting Limit: {Math.min(7, Math.max(1, daysDelta))} Collection Days/Wk
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. GUEST CUSTOMERS / BORROWERS COUNT ADJUSTMENT (Add / Deduct / Set) */}
+                <div className="p-3 rounded-xl bg-muted/40 border border-border space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1.5">
+                      <Users className="size-4 text-blue-600" /> Max Guest Borrowers Count
+                    </Label>
+                    <Badge variant="outline" className="font-mono font-bold text-xs bg-blue-500/10 text-blue-700 border-blue-500/20">
+                      Current: {currentCustomers} Borrowers
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-lg border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setQuotaActionMode("add")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        quotaActionMode === "add"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Plus className="size-3.5" /> Add (+)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuotaActionMode("deduct")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        quotaActionMode === "deduct"
+                          ? "bg-rose-600 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Minus className="size-3.5" /> Deduct (-)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuotaActionMode("set")}
+                      className={`py-1.5 font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                        quotaActionMode === "set"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Edit3 className="size-3.5" /> Set (=)
+                    </button>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold text-muted-foreground">
+                      {quotaActionMode === "add"
+                        ? "Number of Borrowers to ADD (+)"
+                        : quotaActionMode === "deduct"
+                        ? "Number of Borrowers to DEDUCT (-)"
+                        : "Exact Customer Limit (=)"}
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="10"
+                      className="mt-1 text-sm font-mono font-bold h-9"
+                      value={customerDeltaAmount}
+                      onChange={(e) => setCustomerDeltaAmount(e.target.value.replace(/\D/g, ""))}
+                    />
+                    <p className="text-[11px] mt-1 font-medium">
+                      {quotaActionMode === "add" && (
+                        <span className="text-emerald-600 font-bold">
+                          Resulting Limit: {currentCustomers + customerDelta} Borrowers
+                        </span>
+                      )}
+                      {quotaActionMode === "deduct" && (
+                        <span className="text-rose-600 font-bold">
+                          Resulting Limit: {Math.max(1, currentCustomers - customerDelta)} Borrowers
+                        </span>
+                      )}
+                      {quotaActionMode === "set" && (
+                        <span className="text-primary font-bold">
+                          Resulting Limit: {customerDelta} Borrowers
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter className="flex justify-end gap-2 pt-2 border-t">
+                  <Button type="button" variant="outline" onClick={() => setEditingWorkspaceId(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={handleSaveOverride} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                    Save Override
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

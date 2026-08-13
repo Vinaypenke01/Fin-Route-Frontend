@@ -152,26 +152,72 @@ export function OnboardingTour({ open, onClose }: { open: boolean; onClose: () =
   }
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Onboarding tour">
-      {/* Scrim with spotlight cutout via box-shadow trick */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity" onClick={finish} />
+    <div className="fixed inset-0 z-[9999]" role="dialog" aria-modal="true" aria-label="Onboarding tour">
+      {/* SVG Mask Backdrop Spotlight Cutout */}
+      {rect ? (
+        <svg
+          className="absolute inset-0 size-full z-0 cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            finish();
+          }}
+        >
+          <defs>
+            <mask id="tour-spotlight-mask">
+              {/* Full screen white mask = dark backdrop visible */}
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              {/* Black cutout = transparent unblurred spotlight hole */}
+              <rect
+                x={rect.left - 6}
+                y={rect.top - 6}
+                width={rect.width + 12}
+                height={rect.height + 12}
+                rx="8"
+                ry="8"
+                fill="black"
+              />
+            </mask>
+          </defs>
+          {/* Dark backdrop with spotlight hole cut out */}
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            fill="rgba(0, 0, 0, 0.7)"
+            mask="url(#tour-spotlight-mask)"
+          />
+        </svg>
+      ) : (
+        <div
+          className="absolute inset-0 bg-black/65 transition-opacity z-0 cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            finish();
+          }}
+        />
+      )}
+
+      {/* Glowing spotlight ring around the highlighted clear target element */}
       {rect && (
         <div
-          className="pointer-events-none absolute rounded-lg ring-2 ring-primary/80 transition-all"
+          className="pointer-events-none absolute z-10 rounded-lg ring-2 ring-primary shadow-[0_0_25px_rgba(59,130,246,0.6)] transition-all"
           style={{
             top: rect.top - 6,
             left: rect.left - 6,
             width: rect.width + 12,
             height: rect.height + 12,
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.6)",
           }}
         />
       )}
 
       {/* Card */}
       <div
-        className="absolute w-[340px] rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+        className="absolute z-20 w-[340px] rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl pointer-events-auto transition-all"
         style={cardStyle}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="flex items-center gap-2">
@@ -186,9 +232,14 @@ export function OnboardingTour({ open, onClose }: { open: boolean; onClose: () =
             </div>
           </div>
           <button
+            type="button"
             aria-label="Close tour"
             className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-            onClick={finish}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              finish();
+            }}
           >
             <X className="size-4" />
           </button>
@@ -197,26 +248,58 @@ export function OnboardingTour({ open, onClose }: { open: boolean; onClose: () =
           <p className="text-sm text-muted-foreground">{step.body}</p>
         </div>
         <div className="flex items-center justify-between border-t border-border p-3">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {STEPS.map((_, idx) => (
-              <span
+              <button
                 key={idx}
-                className={`h-1.5 rounded-full transition-all ${idx === i ? "w-4 bg-primary" : "w-1.5 bg-muted"}`}
+                type="button"
+                aria-label={`Go to step ${idx + 1}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setI(idx);
+                }}
+                className={`h-1.5 rounded-full transition-all cursor-pointer ${idx === i ? "w-4 bg-primary" : "w-1.5 bg-muted hover:bg-primary/50"}`}
               />
             ))}
           </div>
           <div className="flex items-center gap-1">
             {i > 0 && (
-              <Button size="sm" variant="ghost" onClick={prev}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  prev();
+                }}
+              >
                 <ArrowLeft className="size-3.5" /> Back
               </Button>
             )}
             {i < STEPS.length - 1 ? (
-              <Button size="sm" onClick={next}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  next();
+                }}
+              >
                 Next <ArrowRight className="size-3.5" />
               </Button>
             ) : (
-              <Button size="sm" onClick={finish}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  finish();
+                }}
+              >
                 <Badge variant="secondary" className="mr-1">Done</Badge> Get started
               </Button>
             )}

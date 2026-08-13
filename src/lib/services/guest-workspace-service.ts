@@ -446,9 +446,20 @@ export const guestWorkspaceService = {
     });
   },
 
-  async getCashReconciliation(date?: string): Promise<CashReconciliation> {
-    const query = date ? `?date=${date}` : "";
-    const res = await apiRequest<CashReconciliation>(`/app/cash-reconciliation/${query}`);
+  async getCashReconciliation(date?: string, line?: string): Promise<CashReconciliation> {
+    const params: Record<string, string> = {};
+    if (date) params.date = date;
+    if (line && line !== "all") params.line = line;
+    const query = new URLSearchParams(params).toString();
+    const res = await apiRequest<CashReconciliation>(`/app/cash-reconciliation/${query ? `?${query}` : ""}`);
+    return res.data;
+  },
+
+  async sendRouteClosureReport(payload: { date?: string; line?: string; line_name?: string }): Promise<{ email_sent: boolean; recipient: string; message: string }> {
+    const res = await apiRequest<{ email_sent: boolean; recipient: string; message: string }>(`/app/cash-reconciliation/send-report/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
     return res.data;
   },
 

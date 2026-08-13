@@ -470,8 +470,13 @@ function CollectionsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 0. Daily Cash Flow & Reconciliation Card */}
-      <DailyCashReconciliationCard date={selectedDate} onRefresh={loadCollections} />
+      {/* 0. Daily Cash Flow & Reconciliation Card for Selected Line */}
+      <DailyCashReconciliationCard
+        date={selectedDate}
+        line={selectedLine}
+        lineName={lines.find((l) => l.public_id === selectedLine)?.name || (selectedLine === "all" ? "All Lines" : "Selected Route Line")}
+        onRefresh={loadCollections}
+      />
 
       {/* 1. Current Week Activity & Configured Collection Lines Card */}
       <Card className="p-4 bg-card border-border shadow-xs space-y-3">

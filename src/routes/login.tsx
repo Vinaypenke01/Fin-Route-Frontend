@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AuthShell } from "@/components/auth-shell";
-import { Input, PasswordInput, PhoneInput } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { authService } from "@/lib/services/auth-service";
 import { PwaInstallButton } from "@/components/pwa-install-button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mail, Lock } from "lucide-react";
 import { validatePassword, validateMobileNumber } from "@/lib/auth-validation";
 import { PasswordStrengthChecker } from "@/components/password-strength-checker";
 
@@ -23,7 +22,7 @@ function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mobileError, setMobileError] = useState<string | null>(null);
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [rememberError, setRememberError] = useState<string | null>(null);
 
@@ -31,19 +30,37 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setMobileError(null);
+    setIdentifierError(null);
     setPasswordError(null);
     setRememberError(null);
 
-    // 1. Validate Mobile Number
-    const mobileVal = validateMobileNumber(identifier);
-    if (!mobileVal.isValid) {
-      setMobileError(mobileVal.error || "Please enter a valid 10-digit mobile number starting with 6-9.");
+    const rawId = identifier.trim();
+    if (!rawId) {
+      setIdentifierError("Please enter your registered email address or mobile number.");
       setLoading(false);
       return;
     }
 
-    // 2. Validate Password Requirements (Alphabet Uppercase & Lowercase, Numbers, Special Symbols)
+    // 1. Check if user entered an Email vs Mobile Number
+    let loginValue = rawId;
+    if (rawId.includes("@")) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(rawId)) {
+        setIdentifierError("Please enter a valid email address (e.g. user@example.com).");
+        setLoading(false);
+        return;
+      }
+    } else {
+      const mobileVal = validateMobileNumber(rawId);
+      if (!mobileVal.isValid) {
+        setIdentifierError(mobileVal.error || "Please enter a valid 10-digit mobile number or email address.");
+        setLoading(false);
+        return;
+      }
+      loginValue = `+91${mobileVal.cleaned}`;
+    }
+
+    // 2. Validate Password Requirements
     const passVal = validatePassword(password);
     if (!passVal.isValid) {
       setPasswordError(`Password must include: ${passVal.errors.join(", ")}.`);
@@ -51,16 +68,15 @@ function LoginPage() {
       return;
     }
 
-    // 3. Validate Checkbox (Must be clicked/checked by user)
+    // 3. Validate Remember Me Checkbox
     if (!rememberMe) {
       setRememberError("Please check 'Keep me signed in on this device' to proceed.");
       setLoading(false);
       return;
     }
 
-    const fullMobile = `+91${mobileVal.cleaned}`;
     try {
-      const data = await authService.login(fullMobile, password);
+      const data = await authService.login(loginValue, password);
       const portalMap: Record<string, string> = {
         admin: "/admin",
         lender: "/erp",
@@ -90,29 +106,34 @@ function LoginPage() {
         )}
 
         <div>
-          <label className="text-xs font-medium">Mobile Number</label>
-          <PhoneInput
-            className="mt-1.5"
-            placeholder="9876543210"
-            value={identifier.replace(/^\+91/, "")}
+          <label className="text-xs font-medium flex items-center gap-1.5 mb-1.5">
+            <Mail className="size-3.5 text-primary" /> Email Address or Mobile Number *
+          </label>
+          <Input
+            type="text"
+            className="h-10 text-sm"
+            placeholder="e.g. user@example.com or 9876543210"
+            value={identifier}
             onChange={(e) => {
               setIdentifier(e.target.value);
-              setMobileError(null);
+              setIdentifierError(null);
             }}
             required
           />
-          {mobileError && (
-            <p className="text-[11px] text-destructive font-medium mt-1">{mobileError}</p>
+          {identifierError && (
+            <p className="text-[11px] text-destructive font-medium mt-1">{identifierError}</p>
           )}
         </div>
 
         <div>
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium">Password</label>
-            <Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot?</Link>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium flex items-center gap-1.5">
+              <Lock className="size-3.5 text-primary" /> Password *
+            </label>
+            <Link to="/forgot-password" className="text-xs text-primary hover:underline font-semibold">Forgot?</Link>
           </div>
           <PasswordInput
-            className="mt-1.5"
+            className="h-10"
             placeholder="••••••••"
             value={password}
             onChange={(e) => {

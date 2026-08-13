@@ -88,12 +88,12 @@ export const authService = {
   },
 
   /**
-   * Request password reset OTP.
+   * Request password reset OTP (sent via Email).
    */
-  async forgotPassword(mobile_number: string) {
-    const res = await apiRequest("/auth/password/forgot/", {
+  async forgotPassword(identifier: string) {
+    const res = await apiRequest<{ mobile_number?: string; email?: string }>("/auth/password/forgot/", {
       method: "POST",
-      body: JSON.stringify({ mobile_number }),
+      body: JSON.stringify({ identifier }),
     });
     return res;
   },

@@ -2,21 +2,9 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Calendar, CheckCircle2, Sparkles, AlertCircle, RefreshCw, Settings2 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
-import { guestWorkspaceService, WorkspaceData } from "@/lib/services/guest-workspace-service";
-import { toast } from "sonner";
-
-const DAYS_OF_WEEK = [
-  { key: "monday", label: "Monday" },
-  { key: "tuesday", label: "Tuesday" },
-  { key: "wednesday", label: "Wednesday" },
-  { key: "thursday", label: "Thursday" },
-  { key: "friday", label: "Friday" },
-  { key: "saturday", label: "Saturday" },
-  { key: "sunday", label: "Sunday" },
-];
+import { Calendar, MapPin, Plus, Pencil, Trash2, Users } from "lucide-react";
+import { guestWorkspaceService, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
+import { LineSetupDialog } from "@/components/line-setup-dialog";
 
 export function CollectionDaysSetup({
   onSetupComplete,
@@ -24,181 +12,162 @@ export function CollectionDaysSetup({
   onSetupComplete?: (updated: WorkspaceData) => void;
 }) {
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+  const [lines, setLines] = useState<CollectionLine[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openModal, setOpenModal] = useState(false);
-  const [selectedDays, setSelectedDays] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
 
-  const loadWorkspace = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const ws = await guestWorkspaceService.getWorkspace();
+      const [ws, linesData] = await Promise.all([
+        guestWorkspaceService.getWorkspace(),
+        guestWorkspaceService.getLines(),
+      ]);
       setWorkspace(ws);
-      const existing = ws.allowed_collection_days || [];
-      setSelectedDays(existing);
-
-      const allowedMax = ws.max_allowed_collection_days || 1;
-      // Auto-open modal if user hasn't configured their collection days yet
-      if (existing.length === 0 || existing.length < allowedMax) {
-        setOpenModal(true);
-      }
+      setLines(linesData || []);
     } catch (err) {
-      console.error("Failed to load workspace settings:", err);
+      console.error("Failed to load workspace or lines:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadWorkspace();
+    loadData();
   }, []);
 
-  const maxAllowed = workspace?.max_allowed_collection_days || 1;
-  const planName = workspace?.subscription_plan === "premium" ? "Paid Add-On Plan" : "Free Plan";
-
-  const toggleDay = (dayKey: string) => {
-    if (selectedDays.includes(dayKey)) {
-      setSelectedDays(selectedDays.filter((d) => d !== dayKey));
-    } else {
-      if (selectedDays.length >= maxAllowed) {
-        toast.error(`Your ${planName} allows maximum ${maxAllowed} collection day${maxAllowed > 1 ? "s" : ""} per week.`);
-        return;
-      }
-      setSelectedDays([...selectedDays, dayKey]);
-    }
-  };
-
-  const handleSave = async () => {
-    if (selectedDays.length === 0) {
-      toast.error("Please select at least 1 operating day for collections.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const updated = await guestWorkspaceService.updateWorkspace({
-        allowed_collection_days: selectedDays,
-      });
-      setWorkspace(updated);
-      toast.success("Collection operating days saved successfully!");
-      setOpenModal(false);
-      if (onSetupComplete) onSetupComplete(updated);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save collection days.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading || !workspace) return null;
+  if (loading) return null;
 
   return (
     <>
-      {/* Configure Days Banner Card on Dashboard */}
-      <Card className="p-5 border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold">
-                {planName} ({maxAllowed} Day{maxAllowed > 1 ? "s" : ""}/Wk)
-              </Badge>
-              <Badge variant="outline" className="text-emerald-700 bg-emerald-500/10 border-emerald-500/20">
-                Unlimited Borrowers
-              </Badge>
+      <Card className="p-4 bg-card border-border shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <Calendar className="size-5" />
             </div>
-            <h3 className="font-display text-base font-bold text-foreground">
-              Configured Collection Days:{" "}
-              {selectedDays.length > 0 ? (
-                <span className="text-primary font-mono capitalize">
-                  {selectedDays.map((d) => DAYS_OF_WEEK.find((w) => w.key === d)?.label).join(", ")}
-                </span>
-              ) : (
-                <span className="text-amber-600 font-semibold italic">Not Configured Yet</span>
-              )}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Select which day(s) your business operates on to filter collections and routes.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-foreground">Current Week Activity & Configured Route Lines</h3>
+                <Badge variant={workspace?.subscription_plan === "premium" ? "default" : "secondary"} className="capitalize text-[10px]">
+                  {lines.length} Line{lines.length !== 1 ? "s" : ""} Configured
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure your collection route name, area/location details, and assigned day time slot sessions.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Button onClick={() => setOpenModal(true)} size="sm" variant="outline" className="text-xs gap-1.5 border-primary/40 text-primary">
-              <Settings2 className="size-3.5" /> Configure Days
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLineToEdit(null);
+                setIsLineModalOpen(true);
+              }}
+              className="h-8 px-2.5 text-xs font-semibold gap-1 bg-background border-primary/30 text-primary hover:bg-primary/10"
+            >
+              <Plus className="size-3.5" /> Manage / Add Collection Line
             </Button>
-            {workspace.subscription_plan === "free" && (
-              <Button asChild size="sm" className="text-xs gap-1.5">
-                <Link to="/app/upgrade">
-                  <Sparkles className="size-3.5" /> Upgrade Plan
-                </Link>
-              </Button>
-            )}
           </div>
         </div>
+
+        {/* Route Lines Grid */}
+        {lines.length === 0 ? (
+          <div className="p-4 text-center border border-dashed rounded-xl bg-muted/20 space-y-2">
+            <p className="text-xs text-muted-foreground font-medium">No collection route lines configured yet.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setLineToEdit(null);
+                setIsLineModalOpen(true);
+              }}
+              className="text-xs font-semibold gap-1 text-primary border-primary/40"
+            >
+              <Plus className="size-3.5" /> Create Your First Route Line
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {lines.map((ln) => (
+              <div key={ln.public_id} className="p-3 rounded-xl border border-border bg-muted/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                    <MapPin className="size-3.5 text-primary" /> {ln.name}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30 font-bold">
+                      <Users className="size-3" /> {ln.customers_count ?? 0} Borrower{(ln.customers_count ?? 0) !== 1 ? "s" : ""}
+                    </Badge>
+                    {ln.area && <Badge variant="outline" className="text-[10px] font-normal">{ln.area}</Badge>}
+
+                    <div className="flex items-center gap-0.5 ml-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md"
+                        title="Edit Line"
+                        onClick={() => {
+                          setLineToEdit(ln);
+                          setIsLineModalOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-md"
+                        title="Delete Line"
+                        onClick={async () => {
+                          if (confirm(`Are you sure you want to delete line "${ln.name}"?`)) {
+                            try {
+                              await guestWorkspaceService.deleteLine(ln.public_id);
+                              await loadData();
+                            } catch (err: any) {
+                              alert(err?.message || "Failed to delete line");
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1 pt-1 border-t border-border/40">
+                  {ln.day_schedules?.map((sched) => (
+                    <Badge
+                      key={sched.day_of_week}
+                      variant="secondary"
+                      className="text-[10px] capitalize px-1.5 py-0.5 font-medium border"
+                    >
+                      {sched.day_of_week.slice(0, 3)}: {sched.portion === "morning" ? "🌅 Morn" : sched.portion === "afternoon" ? "🌆 Aft" : "☀️ Full"}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
-      {/* SETUP COLLECTION DAYS DIALOG MODAL */}
-      <Dialog open={openModal} onOpenChange={setOpenModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-primary">
-              <Calendar className="size-5" /> Select Weekly Collection Days
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Your <b>{planName}</b> permits operating on <b>{maxAllowed} Collection Day{maxAllowed > 1 ? "s" : ""} per week</b> with <b>Unlimited Borrowers</b>.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between text-xs font-semibold p-2.5 rounded-lg bg-muted">
-              <span>Selected Operating Days:</span>
-              <span className="font-mono text-primary font-bold">
-                {selectedDays.length} / {maxAllowed} Days
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {DAYS_OF_WEEK.map((day) => {
-                const isSelected = selectedDays.includes(day.key);
-                return (
-                  <button
-                    key={day.key}
-                    type="button"
-                    onClick={() => toggleDay(day.key)}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "border-border/80 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                    }`}
-                  >
-                    <span>{day.label}</span>
-                    {isSelected && <CheckCircle2 className="size-4 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedDays.length >= maxAllowed && workspace.subscription_plan === "free" && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5">
-                  <AlertCircle className="size-4 shrink-0" />
-                  Need more collection operating days?
-                </span>
-                <Button asChild size="sm" variant="outline" className="h-7 text-[11px] border-amber-500/30">
-                  <Link to="/app/upgrade">Upgrade</Link>
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex justify-end gap-2 pt-3">
-            <Button type="button" variant="outline" onClick={() => setOpenModal(false)} disabled={saving} className="text-xs">
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving || selectedDays.length === 0} className="bg-primary text-primary-foreground text-xs font-bold">
-              {saving ? "Saving..." : "Save Operating Days"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LineSetupDialog
+        open={isLineModalOpen}
+        onOpenChange={setIsLineModalOpen}
+        lineToEdit={lineToEdit}
+        onSuccess={() => {
+          loadData();
+          if (onSetupComplete && workspace) onSetupComplete(workspace);
+        }}
+      />
     </>
   );
 }

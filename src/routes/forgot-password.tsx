@@ -1,18 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
-import { PhoneInput } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { authService } from "@/lib/services/auth-service";
+import { Mail, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Forgot Password — FinRoute" }, { name: "description", content: "Reset your FinRoute password using OTP." }] }),
+  head: () => ({ meta: [{ title: "Forgot Password — FinRoute" }, { name: "description", content: "Reset your FinRoute password via Email OTP." }] }),
   component: ForgotPage,
 });
 
 function ForgotPage() {
   const navigate = useNavigate();
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,18 +21,25 @@ function ForgotPage() {
     e.preventDefault();
     setError(null);
 
-    const cleanedMobile = mobileNumber.replace(/\D/g, "");
-    if (!/^[6-9]\d{9}$/.test(cleanedMobile)) {
-      setError("Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.");
+    const val = identifier.trim();
+    if (!val) {
+      setError("Please enter your registered email address or mobile number.");
       return;
     }
 
     setLoading(true);
     try {
-      await authService.forgotPassword(cleanedMobile);
-      navigate({ to: "/reset-password", search: { mobile: cleanedMobile } });
+      const res = await authService.forgotPassword(val);
+      const targetMobile = res?.data?.mobile_number || val;
+      const targetEmail = res?.data?.email || "";
+
+      // Navigate to /reset-password with query params
+      navigate({
+        to: "/reset-password",
+        search: { mobile: targetMobile, email: targetEmail },
+      });
     } catch (err: any) {
-      setError(err.message || "Failed to send password reset OTP. Please verify your mobile number.");
+      setError(err.message || "Failed to send reset OTP. Please verify your registered email address.");
     } finally {
       setLoading(false);
     }
@@ -40,7 +48,7 @@ function ForgotPage() {
   return (
     <AuthShell
       title="Reset your password"
-      subtitle="Enter your registered mobile number to receive a 6-digit reset OTP"
+      subtitle="Enter your registered email address to receive a 6-digit reset OTP in your inbox"
       footer={
         <>
           <Link to="/login" className="font-medium text-primary hover:underline">
@@ -57,19 +65,25 @@ function ForgotPage() {
         )}
 
         <div>
-          <label className="text-xs font-medium">Registered Mobile Number *</label>
-          <PhoneInput
-            className="mt-1.5"
-            value={mobileNumber}
-            onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            maxLength={10}
+          <label className="text-xs font-medium flex items-center gap-1.5 mb-1.5">
+            <Mail className="size-3.5 text-primary" /> Registered Email Address (or Mobile Number) *
+          </label>
+          <Input
+            type="text"
+            className="h-10 text-sm"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             required
-            placeholder="9876543210"
+            placeholder="e.g. user@example.com or 9876543210"
           />
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            We will send a 6-digit One-Time Password (OTP) to your registered email address.
+          </p>
         </div>
 
-        <Button type="submit" size="lg" disabled={loading} className="w-full font-semibold">
-          {loading ? "Sending OTP..." : "Send Reset OTP"}
+        <Button type="submit" size="lg" disabled={loading} className="w-full font-semibold gap-2">
+          {loading ? "Sending Email OTP..." : "Send Reset OTP to Email"}
+          {!loading && <ArrowRight className="size-4" />}
         </Button>
       </form>
     </AuthShell>

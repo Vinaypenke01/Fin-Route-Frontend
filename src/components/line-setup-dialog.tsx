@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Calendar, Sun, Moon, Check, Plus, Loader2, Trash2 } from "lucide-react";
-import { guestWorkspaceService, CollectionLine } from "@/lib/services/guest-workspace-service";
+import { MapPin, Calendar, Sun, Moon, Plus, Loader2, Trash2, Sparkles } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { guestWorkspaceService, CollectionLine, WorkspaceData } from "@/lib/services/guest-workspace-service";
 
 interface LineSetupDialogProps {
   open: boolean;
@@ -29,6 +30,8 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
   const [area, setArea] = useState("");
   const [selectedSchedules, setSelectedSchedules] = useState<Record<string, "morning" | "afternoon" | "both">>({});
   const [availablePortions, setAvailablePortions] = useState<Record<string, string[]>>({});
+  const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+  const [existingLines, setExistingLines] = useState<CollectionLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -50,27 +53,53 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
         setArea("");
         setSelectedSchedules({});
       }
-      loadAvailablePortions();
+      loadData();
     }
   }, [open, lineToEdit]);
 
-  const loadAvailablePortions = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const res = await guestWorkspaceService.getAvailablePortions(lineToEdit?.public_id);
-      setAvailablePortions(res || {});
+      const [ws, linesData, portions] = await Promise.all([
+        guestWorkspaceService.getWorkspace(),
+        guestWorkspaceService.getLines(),
+        guestWorkspaceService.getAvailablePortions(lineToEdit?.public_id),
+      ]);
+      setWorkspace(ws);
+      setExistingLines(linesData || []);
+      setAvailablePortions(portions || {});
     } catch (err) {
-      console.error("Failed to load available portions:", err);
+      console.error("Failed to load line setup data:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  const isFreePlan = workspace?.subscription_plan === "free" || (workspace?.max_allowed_collection_days || 1) === 1;
+  const maxAllowedDays = workspace?.max_allowed_collection_days || (isFreePlan ? 1 : 7);
+
+  // Calculate used sessions across other lines
+  const otherLines = existingLines.filter((l) => !lineToEdit || l.public_id !== lineToEdit.public_id);
+  let usedSessionsCount = 0;
+  const usedDaysSet = new Set<string>();
+
+  otherLines.forEach((l) => {
+    l.day_schedules?.forEach((s) => {
+      usedDaysSet.add(s.day_of_week.toLowerCase());
+      if (s.portion === "both") {
+        usedSessionsCount += 2;
+      } else {
+        usedSessionsCount += 1;
+      }
+    });
+  });
+
+  const isPlanExhausted = isFreePlan && (usedSessionsCount >= 2 || usedDaysSet.size >= maxAllowedDays);
+
   const handleToggleDayPortion = (day: string, portion: "morning" | "afternoon" | "both") => {
     setSelectedSchedules((prev) => {
       const current = prev[day];
       if (current === portion) {
-        // Deselect day
         const next = { ...prev };
         delete next[day];
         return next;
@@ -109,7 +138,7 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
     }));
 
     if (schedulesList.length === 0) {
-      setError("Please select at least one collection day for this line.");
+      setError("Please select at least one collection day session for this line.");
       return;
     }
 
@@ -182,7 +211,7 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
             </div>
           </div>
 
-          {/* 2. Collection Days & Portion Selection */}
+          {/* 2. Collection Days & Portion Selection OR Upgrade Banner */}
           <div className="space-y-2 pt-2 border-t">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-bold flex items-center gap-1.5">
@@ -195,6 +224,21 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
             {loading ? (
               <div className="py-6 flex justify-center text-muted-foreground text-xs gap-2 items-center">
                 <Loader2 className="size-4 animate-spin text-primary" /> Loading day availability...
+              </div>
+            ) : isPlanExhausted && !lineToEdit ? (
+              /* Upgrade Banner for Free Plan Users who exhausted their days/sessions */
+              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-3 text-center my-2">
+                <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
+                  <Sparkles className="size-4 text-amber-600" /> Plan Collection Days Limit Reached
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
+                  Your <b>Free Plan</b> permits operating on a maximum of <b>1 Collection Day (2 Half-Day Sessions) per week</b> across all routes. You have used all available collection days & sessions on your existing configured lines.
+                </p>
+                <Button asChild size="sm" className="text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs">
+                  <Link to="/app/upgrade">
+                    <Sparkles className="size-3.5" /> Upgrade Plan to Unlock More Days
+                  </Link>
+                </Button>
               </div>
             ) : (
               <div className="space-y-2">
@@ -210,14 +254,13 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold w-24">{dayLabel}</span>
                         {currentPortion && (
-                          <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                          <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-bold">
                             Selected
                           </Badge>
                         )}
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {/* Morning Button */}
                         <Button
                           type="button"
                           size="sm"
@@ -231,7 +274,6 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                           <Sun className="size-3" /> Morning (1am–1pm)
                         </Button>
 
-                        {/* Afternoon Button */}
                         <Button
                           type="button"
                           size="sm"
@@ -245,7 +287,6 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                           <Moon className="size-3" /> Afternoon (1pm–12am)
                         </Button>
 
-                        {/* Both / Full Day Button */}
                         <Button
                           type="button"
                           size="sm"
@@ -288,19 +329,21 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving || deleting} className="h-8 text-xs">
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving || deleting} className="h-8 text-xs font-bold">
-              {saving ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin mr-1.5" /> Saving...
-                </>
-              ) : lineToEdit ? (
-                "Save Line Updates"
-              ) : (
-                <>
-                  <Plus className="size-3.5 mr-1.5" /> Create Line
-                </>
-              )}
-            </Button>
+            {!(isPlanExhausted && !lineToEdit) && (
+              <Button size="sm" onClick={handleSave} disabled={saving || deleting} className="h-8 text-xs font-bold">
+                {saving ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" /> Saving...
+                  </>
+                ) : lineToEdit ? (
+                  "Save Line Updates"
+                ) : (
+                  <>
+                    <Plus className="size-3.5 mr-1.5" /> Create Line
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

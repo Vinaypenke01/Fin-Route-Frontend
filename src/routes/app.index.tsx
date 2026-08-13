@@ -14,7 +14,6 @@ import {
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { CollectionDaysSetup } from "@/components/collection-days-setup";
-import { DailyCashReconciliationCard } from "@/components/daily-cash-reconciliation-card";
 import { guestWorkspaceService, DashboardMetrics, Collection, Expense } from "@/lib/services/guest-workspace-service";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -205,8 +204,6 @@ function DashboardPage() {
           </Button>
         </div>
       </div>
-
-      <DailyCashReconciliationCard onRefresh={loadDashboard} />
 
       <CollectionDaysSetup />
 
