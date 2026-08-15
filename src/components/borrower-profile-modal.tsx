@@ -115,10 +115,15 @@ export function BorrowerProfileDetailsModal({
     try {
       const [freshCust, collectionsRes] = await Promise.all([
         guestWorkspaceService.getCustomerDetail(customer.public_id).catch(() => null),
-        guestWorkspaceService.getCollections({ customer: customer.public_id }).catch(() => ({ data: [] })),
+        guestWorkspaceService.getCollections({ customer: customer.public_id, page_size: 1000 }).catch(() => ({ data: [] })),
       ]);
       if (freshCust) setDetail(freshCust);
-      setHistory(collectionsRes.data || []);
+
+      const items = Array.isArray(collectionsRes.data)
+        ? collectionsRes.data
+        : (collectionsRes as any)?.results || (collectionsRes as any)?.data?.results || [];
+
+      setHistory(items);
     } catch (err) {
       console.error("Failed to load customer profile details:", err);
     } finally {

@@ -244,8 +244,18 @@ export const guestWorkspaceService = {
       });
     }
     const query = new URLSearchParams(cleanedParams).toString();
-    const res = await apiRequest<Customer[]>(`/app/customers/${query ? `?${query}` : ""}`);
-    return res;
+    const res = await apiRequest<any>(`/app/customers/${query ? `?${query}` : ""}`);
+
+    let items: Customer[] = [];
+    if (Array.isArray(res.data)) {
+      items = res.data;
+    } else if (res.data && Array.isArray((res.data as any).results)) {
+      items = (res.data as any).results;
+    } else if (res && Array.isArray((res as any).results)) {
+      items = (res as any).results;
+    }
+
+    return { ...res, data: items };
   },
 
   async getCustomerDetail(id: string): Promise<Customer> {
@@ -288,8 +298,18 @@ export const guestWorkspaceService = {
       });
     }
     const query = new URLSearchParams(cleanedParams).toString();
-    const res = await apiRequest<Collection[]>(`/app/collections/${query ? `?${query}` : ""}`);
-    return res;
+    const res = await apiRequest<any>(`/app/collections/${query ? `?${query}` : ""}`);
+
+    let items: Collection[] = [];
+    if (Array.isArray(res.data)) {
+      items = res.data;
+    } else if (res.data && Array.isArray((res.data as any).results)) {
+      items = (res.data as any).results;
+    } else if (res && Array.isArray((res as any).results)) {
+      items = (res.data as any).results;
+    }
+
+    return { ...res, data: items };
   },
 
   async recordCollection(data: {
@@ -351,8 +371,18 @@ export const guestWorkspaceService = {
       });
     }
     const query = new URLSearchParams(cleanedParams).toString();
-    const res = await apiRequest<Expense[]>(`/app/expenses/${query ? `?${query}` : ""}`);
-    return res;
+    const res = await apiRequest<any>(`/app/expenses/${query ? `?${query}` : ""}`);
+
+    let items: Expense[] = [];
+    if (Array.isArray(res.data)) {
+      items = res.data;
+    } else if (res.data && Array.isArray((res.data as any).results)) {
+      items = (res.data as any).results;
+    } else if (res && Array.isArray((res as any).results)) {
+      items = (res as any).results;
+    }
+
+    return { ...res, data: items };
   },
 
   async recordExpense(data: {
