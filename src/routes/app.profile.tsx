@@ -33,6 +33,60 @@ function ProfilePage() {
   const [savingBusiness, setSavingBusiness] = useState(false);
   const [savingPass, setSavingPass] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingData, setDeletingData] = useState(false);
+
+  const handleExportData = async () => {
+    try {
+      const serverExport = await authService.exportPersonalData();
+      const exportObj = {
+        dpdp_reference: "Digital Personal Data Protection Act 2023 - Section 11 Right to Access",
+        export_date: new Date().toISOString(),
+        profile: serverExport.profile || profile,
+        consents: serverExport.consents_given || [],
+        workspace,
+        activity_summary: activities.slice(0, 20),
+      };
+      const dataStr = JSON.stringify(exportObj, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FinRoute_Personal_Data_Export_${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMessage({ type: "success", text: "Personal data export downloaded successfully." });
+    } catch {
+      // Fallback local download if offline
+      const dataStr = JSON.stringify({ profile, workspace }, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FinRoute_Personal_Data_Export_${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMessage({ type: "success", text: "Personal data export downloaded." });
+    }
+  };
+
+  const handleConfirmAccountDeletion = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
+      setMessage({ type: "error", text: "Please type DELETE to confirm account erasure." });
+      return;
+    }
+    setDeletingData(true);
+    try {
+      await authService.deleteAccountAndData();
+      navigate({ to: "/login" });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Failed to process erasure request." });
+    } finally {
+      setDeletingData(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   // Personal Tab Fields
   const [fullName, setFullName] = useState("");
@@ -253,6 +307,7 @@ function ProfilePage() {
             <TabsTrigger value="activity" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Activity Log</TabsTrigger>
             <TabsTrigger value="preferences" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Preferences</TabsTrigger>
             <TabsTrigger value="security" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">Security</TabsTrigger>
+            <TabsTrigger value="dpdp" className="rounded-lg px-3.5 py-1.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-primary font-bold">Privacy & Data Rights</TabsTrigger>
           </TabsList>
         </div>
 
@@ -431,7 +486,77 @@ function ProfilePage() {
             </form>
           </Card>
         </TabsContent>
+
+        <TabsContent value="dpdp">
+          <Card className="p-6 space-y-6">
+            <div>
+              <h3 className="text-base font-bold font-display text-foreground flex items-center gap-2">
+                <span>Digital Personal Data Protection (DPDP Act 2023) Rights</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Under the Indian DPDP Act 2023, you hold statutory rights regarding your digital personal data stored on FinRoute.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-border">
+              <div className="p-4 rounded-xl border border-border bg-card space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-foreground">Right to Access Data</h4>
+                  <Badge variant="outline" className="text-[10px]">Section 11</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Download a complete copy of your personal profile information, workspace metadata, and audit logs.
+                </p>
+                <Button size="sm" variant="outline" onClick={handleExportData} className="w-full font-semibold">
+                  Download My Data (JSON)
+                </Button>
+              </div>
+
+              <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-destructive">Right to Erasure</h4>
+                  <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Section 12</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Request non-reversible erasure of your personal data and account records from our servers.
+                </p>
+                <Button size="sm" variant="destructive" onClick={() => setShowDeleteModal(true)} className="w-full font-semibold">
+                  <Trash2 className="size-3.5 mr-1.5" /> Request Account Erasure
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Account Deletion Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-background border border-border rounded-xl p-6 space-y-4 shadow-xl">
+            <h3 className="font-display text-lg font-bold text-destructive">Confirm Account & Data Erasure</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              This action is <strong>permanent</strong> under Section 12 of the DPDP Act 2023. All your personal data and active workspace settings will be erased.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type <strong className="text-foreground">DELETE</strong> to confirm:</Label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE"
+                className="mt-1"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowDeleteModal(false)} disabled={deletingData}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmAccountDeletion} disabled={deletingData || deleteConfirmText.toUpperCase() !== "DELETE"}>
+                {deletingData ? "Erasing Data..." : "Erase My Account"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

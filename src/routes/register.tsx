@@ -153,20 +153,20 @@ function RegisterPage() {
             {/* Real-time Password Security Criteria Checklist */}
             <PasswordStrengthChecker password={password} />
 
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+            <label className="flex items-start gap-2.5 text-xs text-muted-foreground leading-snug">
               <Checkbox
                 className="mt-0.5"
                 checked={agreed}
                 onCheckedChange={(checked) => setAgreed(!!checked)}
               />
               <span>
-                I agree to the{" "}
-                <Link to="/terms" target="_blank" className="text-primary font-medium underline">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
+                I confirm I am <strong>18 years of age or older</strong> and I agree to the processing of my digital personal data under the{" "}
                 <Link to="/privacy" target="_blank" className="text-primary font-medium underline">
                   Privacy Policy
+                </Link>{" "}
+                and{" "}
+                <Link to="/terms" target="_blank" className="text-primary font-medium underline">
+                  Terms of Service
                 </Link>
                 .
               </span>

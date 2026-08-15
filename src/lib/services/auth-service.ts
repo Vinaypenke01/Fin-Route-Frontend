@@ -126,6 +126,25 @@ export const authService = {
   },
 
   /**
+   * Export personal data under DPDP Act Section 11 Right to Access.
+   */
+  async exportPersonalData() {
+    const res = await apiRequest("/auth/me/export-data/");
+    return res.data;
+  },
+
+  /**
+   * Request account and personal data erasure under DPDP Act Section 12 Right to Erasure.
+   */
+  async deleteAccountAndData() {
+    const res = await apiRequest("/auth/me/delete-account/", {
+      method: "POST",
+    });
+    clearTokens();
+    return res;
+  },
+
+  /**
    * Log out server-side and clear tokens locally.
    */
   async logout(): Promise<void> {
@@ -206,12 +225,12 @@ export const authService = {
     if (Array.isArray(res.data)) {
       return { items: res.data, count: res.data.length, page: 1, total_pages: 1 };
     }
-    const meta = res.meta?.pagination || {};
+    const meta = (res as any).meta || {};
     return {
       items: res.data || [],
       count: meta.count || (res.data ? res.data.length : 0),
-      page: meta.page || 1,
-      total_pages: meta.total_pages || 1,
+      page: meta.current_page || meta.page || 1,
+      total_pages: meta.num_pages || meta.total_pages || 1,
     };
   },
 
@@ -232,12 +251,12 @@ export const authService = {
     if (Array.isArray(res.data)) {
       return { items: res.data, count: res.data.length, page: 1, total_pages: 1 };
     }
-    const meta = res.meta?.pagination || {};
+    const meta = (res as any).meta || {};
     return {
       items: res.data || [],
       count: meta.count || (res.data ? res.data.length : 0),
-      page: meta.page || 1,
-      total_pages: meta.total_pages || 1,
+      page: meta.current_page || meta.page || 1,
+      total_pages: meta.num_pages || meta.total_pages || 1,
     };
   },
 
