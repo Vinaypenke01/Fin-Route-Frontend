@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye, Image as ImageIcon, ChevronLeft, ChevronRight, SlidersHorizontal, MapPin } from "lucide-react";
+import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye, Image as ImageIcon, ChevronLeft, ChevronRight, SlidersHorizontal, MapPin, Users } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
 import { downloadFinancialReportImage } from "@/lib/download-report-image";
@@ -64,7 +64,8 @@ function ReportsPage() {
   // Filters & Cycle Filtration State
   const [dateFrom, setDateFrom] = useState<string>(today);
   const [dateTo, setDateTo] = useState<string>(today);
-  const [selectedDay, setSelectedDay] = useState<string>("all");
+  const [selectedDays, setSelectedDays] = useState<string[]>(["all"]);
+  const [isAllTimeSelected, setIsAllTimeSelected] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("summary");
   const [viewingSummaryDate, setViewingSummaryDate] = useState<string | null>(null);
@@ -91,31 +92,40 @@ function ReportsPage() {
     }
   };
 
+  const [cashRecon, setCashRecon] = useState<any>(null);
+  const [capitalEntries, setCapitalEntries] = useState<any[]>([]);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [colRes, expRes, custRes, ws] = await Promise.all([
+      const [colRes, expRes, custRes, ws, reconRes, capRes] = await Promise.all([
         guestWorkspaceService.getCollections({
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
+          date_from: isAllTimeSelected ? undefined : (dateFrom || undefined),
+          date_to: isAllTimeSelected ? undefined : (dateTo || undefined),
           line: selectedLine === "all" ? undefined : selectedLine,
           page_size: 1000,
         }),
         guestWorkspaceService.getExpenses({
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
+          date_from: isAllTimeSelected ? undefined : (dateFrom || undefined),
+          date_to: isAllTimeSelected ? undefined : (dateTo || undefined),
           page_size: 1000,
         }),
         guestWorkspaceService.getCustomers({ status: "active", page_size: 1000 }),
         guestWorkspaceService.getWorkspace(),
+        guestWorkspaceService.getCashReconciliation(
+          isAllTimeSelected ? undefined : (dateFrom || undefined),
+          selectedLine === "all" ? undefined : selectedLine
+        ).catch(() => null),
+        guestWorkspaceService.getCapitalEntries().catch(() => []),
       ]);
       setCollections(colRes.data || []);
       setExpenses(expRes.data || []);
       setCustomers(custRes.data || []);
+      setCapitalEntries(capRes || []);
+      if (reconRes) setCashRecon(reconRes);
 
       const savedDays = ws.allowed_collection_days || [];
       setConfiguredDays(savedDays);
-      setSelectedDay("all");
     } catch (err) {
       console.error("Failed to load report data:", err);
     } finally {
@@ -129,7 +139,7 @@ function ReportsPage() {
 
   useEffect(() => {
     loadData();
-  }, [dateFrom, dateTo, selectedLine]);
+  }, [dateFrom, dateTo, selectedLine, isAllTimeSelected]);
 
   // ─── Earliest Anchor Date & Weekly Cycles Calculation ───────────────────────
   const earliestAnchorDate = useMemo(() => {
@@ -151,80 +161,97 @@ function ReportsPage() {
         earliest = ed;
       }
     });
-    return earliest;
+    // Ensure we include at least 12 past weeks prior to today so lender can always navigate back to past weeks
+    const pastBoundary = new Date();
+    pastBoundary.setDate(pastBoundary.getDate() - 84);
+    const pastBoundaryStr = pastBoundary.toISOString().slice(0, 10);
+
+    return earliest < pastBoundaryStr ? earliest : pastBoundaryStr;
   }, [customers, collections, expenses, today]);
 
-  const weeklyCycles = useMemo(() => {
+  const activeTargetDaysOfWeek = useMemo<number[]>(() => {
+    const map: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    if (selectedLine && selectedLine !== "all") {
+      const activeLineObj = lines.find((l) => l.public_id === selectedLine);
+      const days: number[] = (activeLineObj?.day_schedules || [])
+        .map((s: any) => map[s.day_of_week.toLowerCase()])
+        .filter((d: any): d is number => typeof d === "number");
+
+      if (days.length > 0) {
+        return Array.from(new Set<number>(days)).sort((a, b) => a - b);
+      }
+    }
+
+    return [new Date().getDay()];
+  }, [selectedLine, lines]);
+
+  const fullWeekCycles = useMemo(() => {
     if (!earliestAnchorDate) return [];
     const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
 
-    let currStart = new Date(earliestAnchorDate);
-    if (isNaN(currStart.getTime())) return [];
+    let weekStart = new Date(earliestAnchorDate);
+    if (isNaN(weekStart.getTime())) return [];
+
+    const dayNum = weekStart.getDay();
+    const distToMon = (dayNum + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - distToMon);
 
     const now = new Date();
-    let index = 1;
+    let weekIndex = 1;
 
-    const formatFilterDate = (dStr: string) => {
-      if (!dStr) return "All";
-      if (dStr === today) return "Today";
+    const formatShortDate = (dStr: string) => {
       try {
         const [y, m, d] = dStr.split("-");
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]}`;
       } catch {
         return dStr;
       }
     };
 
-    while (index <= 156) {
-      const currEnd = new Date(currStart);
-      currEnd.setDate(currEnd.getDate() + 6);
+    while (weekIndex <= 156) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
 
-      const fromStr = currStart.toISOString().slice(0, 10);
-      const toStr = currEnd.toISOString().slice(0, 10);
-      const isCurrent = today >= fromStr && today <= toStr;
+      const weekFromStr = weekStart.toISOString().slice(0, 10);
+      const weekToStr = weekEnd.toISOString().slice(0, 10);
+      const isCurrent = today >= weekFromStr && today <= weekToStr;
 
       cycles.push({
-        index,
-        label: `Week ${index}: ${formatFilterDate(fromStr)} – ${formatFilterDate(toStr)}${isCurrent ? " (Active)" : ""}`,
-        dateFrom: fromStr,
-        dateTo: toStr,
+        index: weekIndex,
+        label: `Week ${weekIndex} (${formatShortDate(weekFromStr)} - ${formatShortDate(weekToStr)})${isCurrent ? " ★ Current Week" : ""}`,
+        dateFrom: weekFromStr,
+        dateTo: weekToStr,
         isCurrent,
       });
 
-      if (currStart > now) break;
-
-      currStart = new Date(currEnd);
-      currStart.setDate(currStart.getDate() + 1);
-      index++;
+      if (weekStart > now) break;
+      weekStart.setDate(weekStart.getDate() + 7);
+      weekIndex++;
     }
 
     return cycles;
   }, [earliestAnchorDate, today]);
 
-  // Auto-select current active week cycle on initial load
-  useEffect(() => {
-    if (weeklyCycles.length > 0 && selectedCycleIndex === null) {
-      const currentCycle = weeklyCycles.find((c) => c.isCurrent);
-      if (currentCycle) {
-        setSelectedCycleIndex(currentCycle.index);
-        setDateFrom(currentCycle.dateFrom);
-        setDateTo(currentCycle.dateTo);
-      } else {
-        const lastCycle = weeklyCycles[weeklyCycles.length - 1];
-        setSelectedCycleIndex(lastCycle.index);
-        setDateFrom(lastCycle.dateFrom);
-        setDateTo(lastCycle.dateTo);
-      }
-    }
-  }, [weeklyCycles]);
+  const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
 
   const handleSelectCycle = (index: number) => {
-    const cycle = weeklyCycles.find((c) => c.index === index);
+    const cycle = fullWeekCycles.find((c) => c.index === index);
     if (cycle) {
       setSelectedCycleIndex(cycle.index);
       setDateFrom(cycle.dateFrom);
       setDateTo(cycle.dateTo);
+      setHasUserManuallySelectedCycle(true);
+      setIsAllTimeSelected(false);
     }
   };
 
@@ -237,13 +264,13 @@ function ReportsPage() {
 
   const handleNextWeek = () => {
     const currentIdx = selectedCycleIndex || 1;
-    if (currentIdx < weeklyCycles.length) {
+    if (currentIdx < fullWeekCycles.length) {
       handleSelectCycle(currentIdx + 1);
     }
   };
 
   const handlePresetCurrentWeek = () => {
-    const active = weeklyCycles.find((c) => c.isCurrent);
+    const active = fullWeekCycles.find((c) => c.isCurrent);
     if (active) {
       handleSelectCycle(active.index);
     } else {
@@ -263,8 +290,35 @@ function ReportsPage() {
     return list;
   }, [configuredDays]);
 
+  // Multi-Day Toggle Handler
+  const toggleDayFilter = (dayKey: string) => {
+    setIsAllTimeSelected(false);
+    if (dayKey === "all") {
+      setSelectedDays(["all"]);
+      return;
+    }
+    setSelectedDays((prev) => {
+      const withoutAll = prev.filter((d) => d !== "all");
+      if (withoutAll.includes(dayKey)) {
+        const next = withoutAll.filter((d) => d !== dayKey);
+        return next.length === 0 ? ["all"] : next;
+      } else {
+        return [...withoutAll, dayKey];
+      }
+    });
+  };
+
   // Quick Preset Handlers
+  const handlePresetAllTime = () => {
+    setIsAllTimeSelected(true);
+    setDateFrom("");
+    setDateTo("");
+    setSelectedDays(["all"]);
+    setSelectedCycleIndex(null);
+  };
+
   const handlePresetToday = () => {
+    setIsAllTimeSelected(false);
     const t = getTodayStr();
     setDateFrom(t);
     setDateTo(t);
@@ -272,6 +326,7 @@ function ReportsPage() {
   };
 
   const handlePresetThisWeek = () => {
+    setIsAllTimeSelected(false);
     const now = new Date();
     const dayOfWeek = now.getDay();
     const distanceToMon = (dayOfWeek + 6) % 7;
@@ -283,6 +338,7 @@ function ReportsPage() {
   };
 
   const handlePresetThisMonth = () => {
+    setIsAllTimeSelected(false);
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -292,14 +348,15 @@ function ReportsPage() {
   };
 
   const handleClearFilters = () => {
+    setIsAllTimeSelected(false);
     setDateFrom(today);
     setDateTo(today);
-    setSelectedDay("all");
+    setSelectedDays(["all"]);
     setSelectedCycleIndex(null);
     setSearchQuery("");
   };
 
-  // Filter collections by date and search query
+  // Filter collections by date, multi-day, and search query
   const filteredCollections = useMemo(() => {
     return collections.filter((c) => {
       // Exclude initial opening balance entries from regular revenue reports
@@ -310,14 +367,16 @@ function ReportsPage() {
       const createdDate = c.created_at ? String(c.created_at).slice(0, 10) : "";
       const targetDate = entryDate || createdDate;
 
-      if (dateFrom && targetDate && targetDate < dateFrom) return false;
-      if (dateTo && targetDate && targetDate > dateTo) return false;
+      if (!isAllTimeSelected) {
+        if (dateFrom && targetDate && targetDate < dateFrom) return false;
+        if (dateTo && targetDate && targetDate > dateTo) return false;
+      }
 
-      if (selectedDay !== "all") {
+      if (!selectedDays.includes("all") && selectedDays.length > 0) {
         const d = new Date(targetDate);
         if (!isNaN(d.getTime())) {
           const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-          if (dayName !== selectedDay.toLowerCase()) return false;
+          if (!selectedDays.includes(dayName)) return false;
         }
       }
 
@@ -332,23 +391,25 @@ function ReportsPage() {
 
       return true;
     });
-  }, [collections, dateFrom, dateTo, selectedDay, searchQuery]);
+  }, [collections, dateFrom, dateTo, selectedDays, isAllTimeSelected, searchQuery]);
 
-  // Filter expenses by date and search query
+  // Filter expenses by date, multi-day, and search query
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
       const expDate = e.expense_date ? String(e.expense_date).slice(0, 10) : "";
       const createdDate = e.created_at ? String(e.created_at).slice(0, 10) : "";
       const targetDate = expDate || createdDate;
 
-      if (dateFrom && targetDate && targetDate < dateFrom) return false;
-      if (dateTo && targetDate && targetDate > dateTo) return false;
+      if (!isAllTimeSelected) {
+        if (dateFrom && targetDate && targetDate < dateFrom) return false;
+        if (dateTo && targetDate && targetDate > dateTo) return false;
+      }
 
-      if (selectedDay !== "all") {
+      if (!selectedDays.includes("all") && selectedDays.length > 0) {
         const d = new Date(targetDate);
         if (!isNaN(d.getTime())) {
           const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-          if (dayName !== selectedDay.toLowerCase()) return false;
+          if (!selectedDays.includes(dayName)) return false;
         }
       }
 
@@ -362,7 +423,42 @@ function ReportsPage() {
 
       return true;
     });
-  }, [expenses, dateFrom, dateTo, selectedDay, searchQuery]);
+  }, [expenses, dateFrom, dateTo, selectedDays, isAllTimeSelected, searchQuery]);
+
+  // Filter disbursements (loans given to borrowers) by date, line, and search query
+  const filteredDisbursements = useMemo(() => {
+    return customers.filter((c) => {
+      const startDate = c.start_date ? String(c.start_date).slice(0, 10) : "";
+      if (!isAllTimeSelected) {
+        if (dateFrom && startDate && startDate < dateFrom) return false;
+        if (dateTo && startDate && startDate > dateTo) return false;
+      }
+      if (selectedLine !== "all" && (c as any).line_public_id !== selectedLine && (c as any).line_id !== selectedLine && (c as any).line !== selectedLine) {
+        return false;
+      }
+      if (!selectedDays.includes("all") && selectedDays.length > 0) {
+        if (c.collection_day) {
+          if (!selectedDays.includes(c.collection_day.toLowerCase())) return false;
+        }
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesCode = c.customer_code?.toLowerCase().includes(q);
+        const matchesName = c.full_name?.toLowerCase().includes(q);
+        const matchesPhone = c.mobile_number?.toLowerCase().includes(q);
+        if (!matchesCode && !matchesName && !matchesPhone) return false;
+      }
+      return true;
+    });
+  }, [customers, dateFrom, dateTo, selectedLine, selectedDays, isAllTimeSelected, searchQuery]);
+
+  const totalDisbursedAmount = useMemo(() => {
+    return filteredDisbursements.reduce((sum, c) => sum + Number(c.disbursed_amount || c.loan_amount || 0), 0);
+  }, [filteredDisbursements]);
+
+  const totalPendingBalance = useMemo(() => {
+    return filteredDisbursements.reduce((sum, c) => sum + Number(c.outstanding_balance || 0), 0);
+  }, [filteredDisbursements]);
 
   // Total Metrics
   const grossCollections = useMemo(() => {
@@ -372,6 +468,15 @@ function ReportsPage() {
   const totalExpenses = useMemo(() => {
     return filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   }, [filteredExpenses]);
+
+  const masterStartingFloat = useMemo(() => {
+    if (capitalEntries.length > 0) {
+      return capitalEntries.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    }
+    return 150000;
+  }, [capitalEntries]);
+
+  const masterActualCashInHand = masterStartingFloat + grossCollections - totalDisbursedAmount - totalExpenses;
 
   const netCollections = grossCollections - totalExpenses;
   const netMarginPct = grossCollections > 0 ? ((netCollections / grossCollections) * 100).toFixed(1) : "0.0";
@@ -450,10 +555,17 @@ function ReportsPage() {
 
   const handleExportReportImage = () => {
     downloadFinancialReportImage(dailySummaries, {
-      dateFrom,
-      dateTo,
-      dayFilter: selectedDay,
+      dateFrom: isAllTimeSelected ? "All Time" : dateFrom,
+      dateTo: isAllTimeSelected ? "All Time" : dateTo,
+      dayFilter: selectedDays.join(", "),
       workspaceName: "FinRoute Finance Workspace",
+      startingFloat: cashRecon?.capital_total || 0,
+      givenToBorrowers: totalDisbursedAmount,
+      totalDisbursedCount: filteredDisbursements.length,
+      grossCollections: grossCollections,
+      totalExpenses: totalExpenses,
+      remainingPendingDue: totalPendingBalance,
+      actualCashInHand: (cashRecon?.capital_total || 0) + grossCollections - totalDisbursedAmount - totalExpenses,
     });
   };
 
@@ -494,84 +606,61 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* 1. Route Line Filter Selection */}
-      {lines.length > 0 && (
-        <Card className="p-3.5 space-y-2 bg-card border-border shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-foreground flex items-center gap-1.5">
-              <MapPin className="size-3.5 text-primary" /> Filter Reports by Route Line:
-            </span>
-            {selectedLine !== "all" && (
-              <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => setSelectedLine("all")}>
-                Show All Lines
-              </Button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSelectedLine("all")}
-              className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
-                selectedLine === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border"
-              }`}
-            >
-              All Route Lines
-            </button>
-            {lines.map((ln) => {
-              const isSelected = selectedLine === ln.public_id;
-              return (
-                <button
-                  key={ln.public_id}
-                  type="button"
-                  onClick={() => setSelectedLine(isSelected ? "all" : ln.public_id)}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                      : "bg-background text-muted-foreground hover:text-foreground border-border"
-                  }`}
-                >
-                  <MapPin className={`size-3 ${isSelected ? "text-primary-foreground" : "text-primary"}`} />
-                  <span>{ln.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* 2. Smart Weekly Collection & Financial Cycle Navigation Bar */}
-      <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+      {/* Unified Filter Dashboard Bar */}
+      <Card className="p-4 bg-card border-border/80 shadow-xs space-y-3.5">
+        {/* Top Bar: Quick Time Presets & Active Range Badge */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/50 pb-3">
           <div className="flex items-center gap-2">
-            <Calendar className="size-4 text-primary" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Weekly Financial Report Cycles</h3>
-            <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
-              {dateFrom === dateTo ? (dateFrom === today ? "Today" : dateFrom) : `${dateFrom || "Start"} to ${dateTo || "End"}`}
+            <Filter className="size-4 text-primary" />
+            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Report Filters</h3>
+            <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
+              {isAllTimeSelected
+                ? "🌐 All-Time Summary"
+                : dateFrom === dateTo
+                ? dateFrom === today
+                  ? "Today"
+                  : dateFrom
+                : `${dateFrom || "Start"} → ${dateTo || "End"}`}
             </Badge>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
               size="sm"
-              variant={selectedCycleIndex !== null && weeklyCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
-              onClick={handlePresetCurrentWeek}
-              className="h-7 text-[11px] px-2.5 font-bold"
+              variant={isAllTimeSelected ? "default" : "outline"}
+              onClick={handlePresetAllTime}
+              className={`h-7 text-[11px] px-2.5 font-bold ${
+                isAllTimeSelected ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : ""
+              }`}
             >
-              Current Week (Active)
+              🌐 All-Time Totals
             </Button>
-            <Button size="sm" variant={dateFrom === today && dateTo === today ? "default" : "outline"} onClick={handlePresetToday} className="h-7 text-[11px] px-2.5">
+            <Button
+              size="sm"
+              variant={!isAllTimeSelected && dateFrom === today && dateTo === today ? "default" : "outline"}
+              onClick={handlePresetToday}
+              className="h-7 text-[11px] px-2.5 font-semibold"
+            >
               Today
             </Button>
-
-            <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5">
+            <Button
+              size="sm"
+              variant={!isAllTimeSelected && selectedCycleIndex !== null && fullWeekCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
+              onClick={handlePresetCurrentWeek}
+              className="h-7 text-[11px] px-2.5 font-semibold"
+            >
+              Current Week
+            </Button>
+            <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5 font-semibold">
               This Month
             </Button>
             <Button
               size="sm"
               variant={showCustomRange ? "secondary" : "outline"}
-              onClick={() => setShowCustomRange(!showCustomRange)}
+              onClick={() => {
+                setIsAllTimeSelected(false);
+                setShowCustomRange(!showCustomRange);
+              }}
               className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
             >
               <SlidersHorizontal className="size-3" /> Custom Range
@@ -582,105 +671,226 @@ function ReportsPage() {
           </div>
         </div>
 
-        {/* Primary Cycle Navigation Control: Prev Arrow - Cycle Dropdown - Next Arrow */}
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handlePrevWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
-            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
-            title="Previous Week Cycle"
-          >
-            <ChevronLeft className="size-4" /> <span className="hidden sm:inline">Prev Week</span>
-          </Button>
+        {/* Collapsible Custom Date & Financial Week Picker */}
+        {showCustomRange && (
+          <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Calendar className="size-3.5 text-primary" /> Select Specific Week Cycle or Custom Dates:
+              </span>
+              {selectedCycleIndex !== null && (
+                <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
+                  Week {selectedCycleIndex} Selected
+                </Badge>
+              )}
+            </div>
 
-          <div className="flex-1 min-w-[200px]">
-            <Select
-              value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
-              onValueChange={(val) => handleSelectCycle(Number(val))}
-            >
-              <SelectTrigger className="h-9 font-semibold text-xs sm:text-sm text-primary border-primary/40 bg-primary/5">
-                <SelectValue placeholder="Select Report Week Cycle..." />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Week-Wise Selector */}
+              <div>
+                <Label className="text-[11px] font-bold text-foreground">Financial Week Cycle</Label>
+                <Select
+                  value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
+                  onValueChange={(val) => {
+                    const idx = Number(val);
+                    handleSelectCycle(idx);
+                  }}
+                >
+                  <SelectTrigger className="mt-1 h-8.5 text-xs bg-background font-semibold text-primary border-primary/30">
+                    <SelectValue placeholder="Select Week (e.g. Week 1)..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {fullWeekCycles.map((c) => (
+                      <SelectItem key={c.index} value={String(c.index)} className="text-xs font-medium">
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* From Date */}
+              <div>
+                <Label className="text-[11px] font-bold text-foreground">From Date</Label>
+                <Input
+                  type="date"
+                  className="mt-1 h-8.5 text-xs font-mono bg-background"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setSelectedCycleIndex(null);
+                    setIsAllTimeSelected(false);
+                  }}
+                />
+              </div>
+
+              {/* To Date */}
+              <div>
+                <Label className="text-[11px] font-bold text-foreground">To Date</Label>
+                <Input
+                  type="date"
+                  className="mt-1 h-8.5 text-xs font-mono bg-background"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setSelectedCycleIndex(null);
+                    setIsAllTimeSelected(false);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3-Column Interactive Filter Bar: Route Line, Day Pills, Search */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+          {/* Column 1: Route Line Dropdown */}
+          <div className="space-y-1">
+            <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+              <MapPin className="size-3 text-primary" /> Route Line
+            </Label>
+            <Select value={selectedLine} onValueChange={setSelectedLine}>
+              <SelectTrigger className="h-8.5 text-xs bg-background">
+                <SelectValue placeholder="Select Route Line..." />
               </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {weeklyCycles.map((cycle) => (
-                  <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
-                    {cycle.label}
+              <SelectContent>
+                <SelectItem value="all" className="text-xs font-bold">All Route Lines</SelectItem>
+                {lines.map((ln) => (
+                  <SelectItem key={ln.public_id} value={ln.public_id} className="text-xs">
+                    {ln.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleNextWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
-            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
-            title="Next Week Cycle"
-          >
-            <span className="hidden sm:inline">Next Week</span> <ChevronRight className="size-4" />
-          </Button>
-        </div>
-
-        {/* Route Day Filter & Search & Custom Date Range */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">Route Day Filter</Label>
-            <Select value={selectedDay} onValueChange={setSelectedDay}>
-              <SelectTrigger className="mt-1 h-8 sm:h-9 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {dynamicDaysList.map((d) => (
-                  <SelectItem key={d.key} value={d.key}>{d.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Column 2: Route Days Multi-Select Filter */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                <Calendar className="size-3 text-primary" /> Days of Week
+              </Label>
+              {!selectedDays.includes("all") && (
+                <span className="text-[10px] text-primary font-bold">
+                  {selectedDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(" + ")}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {dynamicDaysList.map((d) => {
+                const isSelected = selectedDays.includes(d.key);
+                return (
+                  <button
+                    key={d.key}
+                    type="button"
+                    onClick={() => toggleDayFilter(d.key)}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md border transition-all ${
+                      isSelected
+                        ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                        : "bg-background text-muted-foreground hover:text-foreground border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    {isSelected && d.key !== "all" ? "✓ " : ""}{d.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">Search Records</Label>
-            <div className="relative mt-1">
+
+          {/* Column 3: Search Bar */}
+          <div className="space-y-1">
+            <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+              <Search className="size-3 text-primary" /> Search Records
+            </Label>
+            <div className="relative">
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search borrower, receipt, category..."
-                className="pl-8 h-8 sm:h-9 text-xs"
+                placeholder="Search borrower name, code, receipt..."
+                className="pl-8 h-8.5 text-xs bg-background"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground font-bold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
-          {showCustomRange && (
-            <div className="grid grid-cols-2 gap-2 col-span-1 sm:col-span-2 lg:col-span-1">
-              <div>
-                <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
-                <Input
-                  type="date"
-                  className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
-                  value={dateFrom}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setSelectedCycleIndex(null);
-                  }}
-                />
-              </div>
-              <div>
-                <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
-                <Input
-                  type="date"
-                  className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
-                  value={dateTo}
-                  onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setSelectedCycleIndex(null);
-                  }}
-                />
-              </div>
+        </div>
+      </Card>
+
+      {/* 3. Master Cash & Portfolio Financial Ledger Position Card */}
+      <Card className="p-4.5 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-blue-500/15 border-emerald-500/30 dark:border-emerald-500/40 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/20 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-600 text-white font-bold shadow-xs">
+              <Wallet className="size-6" />
             </div>
-          )}
+            <div>
+              <h3 className="text-sm sm:text-base font-extrabold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
+                <span>MASTER CASH & PORTFOLIO FINANCIAL POSITION</span>
+                <Badge variant="outline" className="text-[10px] font-mono bg-emerald-600 text-white border-none font-bold">
+                  Includes Starting Float Cash
+                </Badge>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Actual Cash in Hand = (Starting Float + Installment Collections) − (Loan Disbursements + Expenses)
+              </p>
+            </div>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
+              {inr(masterActualCashInHand)}
+            </p>
+            <p className="text-[11px] text-muted-foreground font-semibold">Actual Physical Cash in Hand</p>
+          </div>
+        </div>
+
+        {/* 6 Comprehensive Financial Breakdown Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs pt-0.5">
+          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Starting Float Cash</span>
+            <span className="font-mono font-extrabold text-blue-700 dark:text-blue-300 text-sm">+{inr(masterStartingFloat)}</span>
+            <span className="text-[10px] text-blue-600 block italic">Total Injected Capital</span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Given to Borrowers</span>
+            <span className="font-mono font-extrabold text-purple-700 dark:text-purple-300 text-sm">−{inr(totalDisbursedAmount)}</span>
+            <span className="text-[10px] text-purple-600 block font-medium">{filteredDisbursements.length} Loans Disbursed</span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Installments Collected</span>
+            <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">+{inr(grossCollections)}</span>
+            <span className="text-[10px] text-emerald-600 block font-medium">{filteredCollections.length} Receipts</span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Expenses Deducted</span>
+            <span className="font-mono font-extrabold text-rose-700 dark:text-rose-300 text-sm">−{inr(totalExpenses)}</span>
+            <span className="text-[10px] text-rose-600 block font-medium">{filteredExpenses.length} Vouchers</span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Remaining Pending Due</span>
+            <span className="font-mono font-extrabold text-amber-700 dark:text-amber-300 text-sm">{inr(totalPendingBalance)}</span>
+            <span className="text-[10px] text-amber-600 block font-medium">Uncollected Balance</span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-0.5">
+            <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold block uppercase tracking-wider">Actual Cash In Hand</span>
+            <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">
+              {inr(masterActualCashInHand)}
+            </span>
+            <span className="text-[10px] text-emerald-600 block font-bold">Reconciled Float</span>
+          </div>
         </div>
       </Card>
 
@@ -750,6 +960,10 @@ function ReportsPage() {
           <TabsTrigger value="collections" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
             <span className="hidden sm:inline">Collection Receipts ({filteredCollections.length})</span>
             <span className="sm:hidden">Collections ({filteredCollections.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="disbursements" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold text-purple-700 dark:text-purple-300">
+            <span className="hidden sm:inline">Loan Disbursements / Borrower Given Amount ({filteredDisbursements.length})</span>
+            <span className="sm:hidden">Disbursements ({filteredDisbursements.length})</span>
           </TabsTrigger>
           <TabsTrigger value="expenses" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
             <span className="hidden sm:inline">Expense Vouchers ({filteredExpenses.length})</span>
@@ -893,7 +1107,87 @@ function ReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* Tab 3: Detailed Expenses Register */}
+        {/* Tab 3: Loan Disbursements / Borrower Given Amount */}
+        <TabsContent value="disbursements">
+          <Card className="p-4 space-y-4 border-border/80">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Users className="size-4 text-purple-600" /> Borrower Loan Disbursements (Given Amount from Route Start)
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Complete register of actual physical cash handed out to borrowers when loans were issued.
+                </p>
+              </div>
+              <Badge variant="outline" className="font-mono font-bold text-xs bg-purple-500/10 text-purple-700 border-purple-500/30 px-3 py-1">
+                Total Given: {inr(totalDisbursedAmount)}
+              </Badge>
+            </div>
+
+            {loading ? (
+              <p className="text-xs text-muted-foreground text-center py-8">Loading disbursement records...</p>
+            ) : filteredDisbursements.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">No borrower loan disbursements found matching selected filters.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 text-xs">
+                      <TableHead className="py-2.5 font-bold">Borrower Code & Name</TableHead>
+                      <TableHead className="py-2.5 font-bold">Disbursement Date</TableHead>
+                      <TableHead className="py-2.5 font-bold">Route Line / Day</TableHead>
+                      <TableHead className="py-2.5 font-bold text-right">Principal Loan</TableHead>
+                      <TableHead className="py-2.5 font-bold text-right text-purple-700 dark:text-purple-300">Amount Given (Handed Out)</TableHead>
+                      <TableHead className="py-2.5 font-bold text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDisbursements.map((c) => (
+                      <TableRow key={c.public_id} className="text-xs hover:bg-muted/30">
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              {c.customer_code}
+                            </span>
+                            <span className="font-bold text-foreground">{c.full_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3 font-mono text-xs">
+                          {c.start_date ? String(c.start_date).slice(0, 10) : "-"}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium text-xs">{(c as any).line_name || c.line || "General Workspace"}</span>
+                            {c.collection_day && (
+                              <Badge variant="outline" className="text-[10px] capitalize bg-muted font-normal">
+                                {c.collection_day}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3 text-right font-mono text-foreground font-semibold">
+                          {inr(Number(c.loan_amount || 0))}
+                        </TableCell>
+                        <TableCell className="py-3 text-right font-mono font-bold text-purple-700 dark:text-purple-300 text-sm">
+                          {inr(Number(c.disbursed_amount || c.loan_amount || 0))}
+                        </TableCell>
+                        <TableCell className="py-3 text-center">
+                          <Badge variant="outline" className={`text-[10px] capitalize font-bold ${
+                            c.status === "active" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30" : "bg-muted text-muted-foreground"
+                          }`}>
+                            {c.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* Tab 4: Detailed Expense Vouchers */}
         <TabsContent value="expenses">
           <Card className="p-4 space-y-3 border-border/80">
             <div className="flex items-center justify-between border-b pb-3">

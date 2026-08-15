@@ -50,7 +50,7 @@ export function DailyCashReconciliationCard({
       const savedStatus = localStorage.getItem(storageKey) as "idle" | "started" | "stopped" | null;
       if (savedStatus) {
         setRouteState(savedStatus);
-      } else if ((data?.capital_total || 0) > 0 || (data?.collections_total || 0) > 0) {
+      } else if ((data?.capital_total || 0) > 0 || (data?.opening_carried_forward || 0) > 0 || (data?.collections_total || 0) > 0) {
         setRouteState("started");
       } else {
         setRouteState("idle");
@@ -81,6 +81,7 @@ export function DailyCashReconciliationCard({
           entry_date: targetDate,
           amount: amountNum,
           remarks: remarks.trim() || "Starting route cash / opening capital",
+          line: line && line !== "all" ? line : undefined,
         });
       }
       localStorage.setItem(storageKey, "started");
@@ -139,6 +140,7 @@ export function DailyCashReconciliationCard({
         entry_date: targetDate,
         amount: amountNum,
         remarks: remarks.trim() || "Additional cash added during route",
+        line: line && line !== "all" ? line : undefined,
       });
       setIsAddCapitalModalOpen(false);
       setCapitalAmountStr("5000");
@@ -215,7 +217,14 @@ export function DailyCashReconciliationCard({
                 type="button"
                 size="sm"
                 className="h-8 text-xs font-bold px-3 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                onClick={() => setIsStartModalOpen(true)}
+                onClick={() => {
+                  if (recon?.opening_carried_forward && recon.opening_carried_forward > 0) {
+                    setCapitalAmountStr(recon.opening_carried_forward.toString());
+                  } else {
+                    setCapitalAmountStr("5000");
+                  }
+                  setIsStartModalOpen(true);
+                }}
               >
                 <Play className="size-3.5 fill-current" /> Start Route
               </Button>
@@ -311,7 +320,7 @@ export function DailyCashReconciliationCard({
                   +{inr(capital)}
                 </p>
                 <p className="text-[10px] text-blue-700/80">
-                  {recon?.capital_count || 0} capital added
+                  {recon?.is_carried_forward ? "Carried forward from yesterday" : `${recon?.capital_count || 0} capital added`}
                 </p>
               </div>
 

@@ -145,7 +145,7 @@ export function BorrowerProfileDetailsModal({
           payment_mode: 1,
           payment_mode_name: "Cash",
           remarks: `Opening balance installment #${i + 1} paid for existing borrower`,
-          created_at: targetCust.created_at || openingDate,
+          created_at: (targetCust as any).created_at || openingDate,
         }));
       }
 

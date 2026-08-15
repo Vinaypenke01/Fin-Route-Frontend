@@ -16,6 +16,13 @@ export interface ReportFilterMetadata {
   dateTo?: string;
   dayFilter?: string;
   workspaceName?: string;
+  startingFloat?: number;
+  givenToBorrowers?: number;
+  totalDisbursedCount?: number;
+  grossCollections?: number;
+  totalExpenses?: number;
+  remainingPendingDue?: number;
+  actualCashInHand?: number;
 }
 
 /**
@@ -61,8 +68,8 @@ export async function downloadFinancialReportImage(
   ctx.stroke();
 
   ctx.fillStyle = "#0f172a";
-  ctx.font = "bold 28px sans-serif";
-  ctx.fillText("📊 Financial Summary & Net Cash Flow Report", marginX + 25, headerY + 44);
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillText("📊 Financial Summary & Master Ledger Statement", marginX + 25, headerY + 44);
 
   const dateFilterStr =
     meta.dateFrom || meta.dateTo
@@ -71,7 +78,7 @@ export async function downloadFinancialReportImage(
 
   ctx.fillStyle = "#64748b";
   ctx.font = "14px sans-serif";
-  ctx.fillText(`${dateFilterStr} · Route Day: ${(meta.dayFilter || "all").toUpperCase()}`, marginX + 25, headerY + 74);
+  ctx.fillText(`${dateFilterStr} · Days: ${(meta.dayFilter || "all").toUpperCase()}`, marginX + 25, headerY + 74);
 
   ctx.fillStyle = "#047857";
   ctx.font = "bold 15px sans-serif";
@@ -83,74 +90,106 @@ export async function downloadFinancialReportImage(
   ctx.font = "13px monospace";
   ctx.fillText(`Generated: ${dateStr}`, width - marginX - 260, headerY + 74);
 
-  // 3. KPI Summary Grid (4 Cards)
-  const statsY = headerY + 120;
-  const cardGap = 20;
-  const cardW = Math.floor((headerWidth - cardGap * 3) / 4); // ~270px
-  const cardH = 95;
+  // 3. Master Cash & Portfolio Financial Ledger Grid (6 Cards in 2 Rows)
+  const statsY = headerY + 115;
+  const cardGap = 15;
+  const cardW = Math.floor((headerWidth - cardGap * 2) / 3); // ~370px
+  const cardH = 90;
 
-  const totalGross = dailySummaries.reduce((sum, r) => sum + r.grossCollected, 0);
-  const totalExp = dailySummaries.reduce((sum, r) => sum + r.totalExpenses, 0);
-  const totalNet = totalGross - totalExp;
-  const totalReceipts = dailySummaries.reduce((sum, r) => sum + r.collectionCount, 0);
+  const totalGross = meta.grossCollections ?? dailySummaries.reduce((sum, r) => sum + r.grossCollected, 0);
+  const totalExp = meta.totalExpenses ?? dailySummaries.reduce((sum, r) => sum + r.totalExpenses, 0);
+  const startingFloat = meta.startingFloat ?? 0;
+  const givenAmount = meta.givenToBorrowers ?? 0;
+  const pendingDue = meta.remainingPendingDue ?? 0;
+  const actualInHand = meta.actualCashInHand ?? (startingFloat + totalGross - givenAmount - totalExp);
 
-  // Card 1: Gross Collections (Emerald)
-  ctx.fillStyle = "#ecfdf5";
+  // Row 1: Cards 1, 2, 3
+  // Card 1: Starting Float Cash (Blue)
+  ctx.fillStyle = "#eff6ff";
   roundRect(ctx, marginX, statsY, cardW, cardH, 12, true, false);
+  ctx.strokeStyle = "#bfdbfe";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = "#1d4ed8";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("STARTING FLOAT CASH", marginX + 16, statsY + 28);
+  ctx.fillStyle = "#1e40af";
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(`+${inr(startingFloat)}`, marginX + 16, statsY + 62);
+
+  // Card 2: Given to Borrowers (Purple)
+  const c2X = marginX + cardW + cardGap;
+  ctx.fillStyle = "#faf5ff";
+  roundRect(ctx, c2X, statsY, cardW, cardH, 12, true, false);
+  ctx.strokeStyle = "#e9d5ff";
+  ctx.stroke();
+  ctx.fillStyle = "#7e22ce";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("GIVEN TO BORROWERS (DISBURSED)", c2X + 16, statsY + 28);
+  ctx.fillStyle = "#6b21a8";
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(`−${inr(givenAmount)}`, c2X + 16, statsY + 62);
+  if (meta.totalDisbursedCount) {
+    ctx.fillStyle = "#9333ea";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(`${meta.totalDisbursedCount} Loans Issued`, c2X + 220, statsY + 62);
+  }
+
+  // Card 3: Installments Collected (Emerald)
+  const c3X = c2X + cardW + cardGap;
+  ctx.fillStyle = "#ecfdf5";
+  roundRect(ctx, c3X, statsY, cardW, cardH, 12, true, false);
   ctx.strokeStyle = "#a7f3d0";
   ctx.stroke();
-
   ctx.fillStyle = "#047857";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText("Gross Collections", marginX + 18, statsY + 30);
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("INSTALLMENTS COLLECTED", c3X + 16, statsY + 28);
   ctx.fillStyle = "#047857";
-  ctx.font = "bold 22px monospace";
-  ctx.fillText(inr(totalGross), marginX + 18, statsY + 68);
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(`+${inr(totalGross)}`, c3X + 16, statsY + 62);
 
-  // Card 2: Total Expenses (Amber)
-  const c2X = marginX + cardW + cardGap;
+  // Row 2: Cards 4, 5, 6
+  const row2Y = statsY + cardH + cardGap;
+
+  // Card 4: Expenses Deducted (Rose)
+  ctx.fillStyle = "#fff1f2";
+  roundRect(ctx, marginX, row2Y, cardW, cardH, 12, true, false);
+  ctx.strokeStyle = "#fecdd3";
+  ctx.stroke();
+  ctx.fillStyle = "#be123c";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("EXPENSES DEDUCTED", marginX + 16, row2Y + 28);
+  ctx.fillStyle = "#9f1239";
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(`−${inr(totalExp)}`, marginX + 16, row2Y + 62);
+
+  // Card 5: Remaining Pending Due (Amber)
   ctx.fillStyle = "#fffbeb";
-  roundRect(ctx, c2X, statsY, cardW, cardH, 12, true, false);
+  roundRect(ctx, c2X, row2Y, cardW, cardH, 12, true, false);
   ctx.strokeStyle = "#fde68a";
   ctx.stroke();
-
   ctx.fillStyle = "#b45309";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText("Operational Expenses", c2X + 18, statsY + 30);
-  ctx.fillStyle = "#b45309";
-  ctx.font = "bold 22px monospace";
-  ctx.fillText(inr(totalExp), c2X + 18, statsY + 68);
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("REMAINING PENDING DUE", c2X + 16, row2Y + 28);
+  ctx.fillStyle = "#92400e";
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(inr(pendingDue), c2X + 16, row2Y + 62);
 
-  // Card 3: Net Cash Flow (Blue Accent)
-  const c3X = c2X + cardW + cardGap;
-  ctx.fillStyle = "#eff6ff";
-  roundRect(ctx, c3X, statsY, cardW, cardH, 12, true, false);
-  ctx.strokeStyle = "#bfdbfe";
+  // Card 6: Actual Physical Cash In Hand (Emerald Highlight)
+  ctx.fillStyle = "#d1fae5";
+  roundRect(ctx, c3X, row2Y, cardW, cardH, 12, true, false);
+  ctx.strokeStyle = "#34d399";
+  ctx.lineWidth = 2;
   ctx.stroke();
-
-  ctx.fillStyle = "#1d4ed8";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText("Net Revenue / Cash Flow", c3X + 18, statsY + 30);
-  ctx.fillStyle = "#1e40af";
+  ctx.fillStyle = "#065f46";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("ACTUAL PHYSICAL CASH IN HAND", c3X + 16, row2Y + 28);
+  ctx.fillStyle = "#047857";
   ctx.font = "bold 22px monospace";
-  ctx.fillText(inr(totalNet), c3X + 18, statsY + 68);
-
-  // Card 4: Total Receipts
-  const c4X = c3X + cardW + cardGap;
-  ctx.fillStyle = "#f8fafc";
-  roundRect(ctx, c4X, statsY, cardW, cardH, 12, true, false);
-  ctx.strokeStyle = "#cbd5e1";
-  ctx.stroke();
-
-  ctx.fillStyle = "#475569";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText("Collection Receipts", c4X + 18, statsY + 30);
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "bold 22px monospace";
-  ctx.fillText(`${totalReceipts} Receipts`, c4X + 18, statsY + 68);
+  ctx.fillText(inr(actualInHand), c3X + 16, row2Y + 62);
 
   // 4. Daily Breakdown Table Section
-  const tableSectionY = statsY + 115;
+  const tableSectionY = row2Y + cardH + 25;
   ctx.fillStyle = "#0f172a";
   ctx.font = "bold 18px sans-serif";
   ctx.fillText("Daily Net Summary Ledger", marginX, tableSectionY + 20);

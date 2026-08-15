@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Search, Filter, Calendar, RefreshCw, ChevronLeft, ChevronRight, SlidersHorizontal, MapPin, Users, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
-import { guestWorkspaceService, Expense } from "@/lib/services/guest-workspace-service";
+import { guestWorkspaceService, Expense, Customer, Collection } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
 
@@ -89,27 +89,94 @@ function ExpensesPage() {
     loadExpenses();
   }, [dateFrom, dateTo]);
 
+  const [anchorCustomers, setAnchorCustomers] = useState<Customer[]>([]);
+  const [anchorCollections, setAnchorCollections] = useState<Collection[]>([]);
+
+  useEffect(() => {
+    async function loadWorkspaceAnchorData() {
+      try {
+        const [cRes, colRes] = await Promise.all([
+          guestWorkspaceService.getCustomers({ status: "active", page_size: 1000 }),
+          guestWorkspaceService.getCollections({ page_size: 1000 }),
+        ]);
+        setAnchorCustomers(cRes.data || []);
+        setAnchorCollections(colRes.data || []);
+      } catch (err) {
+        console.error("Failed to load anchor data in expenses:", err);
+      }
+    }
+    loadWorkspaceAnchorData();
+  }, []);
+
   // ─── Earliest Anchor Date & Weekly Cycles Calculation ───────────────────────
   const earliestAnchorDate = useMemo(() => {
     let earliest = today;
+    anchorCustomers.forEach((c) => {
+      if (c.start_date && c.start_date.slice(0, 10) < earliest) {
+        earliest = c.start_date.slice(0, 10);
+      }
+    });
+    anchorCollections.forEach((col) => {
+      const cd = col.collection_date ? String(col.collection_date).slice(0, 10) : "";
+      if (cd && cd < earliest) {
+        earliest = cd;
+      }
+    });
     expenses.forEach((e) => {
       const ed = e.expense_date ? String(e.expense_date).slice(0, 10) : "";
       if (ed && ed < earliest) {
         earliest = ed;
       }
     });
-    return earliest;
-  }, [expenses, today]);
+
+    // Ensure we include at least 12 past weeks prior to today so lender can always navigate back to past weeks
+    const pastBoundary = new Date();
+    pastBoundary.setDate(pastBoundary.getDate() - 84);
+    const pastBoundaryStr = pastBoundary.toISOString().slice(0, 10);
+
+    return earliest < pastBoundaryStr ? earliest : pastBoundaryStr;
+  }, [anchorCustomers, anchorCollections, expenses, today]);
+
+  const activeTargetDaysOfWeek = useMemo<number[]>(() => {
+    const map: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    if (selectedLine && selectedLine !== "all") {
+      const activeLineObj = lines.find((l) => l.public_id === selectedLine);
+      const days: number[] = (activeLineObj?.day_schedules || [])
+        .map((s: any) => map[s.day_of_week.toLowerCase()])
+        .filter((d: any): d is number => typeof d === "number");
+
+      if (days.length > 0) {
+        return Array.from(new Set<number>(days)).sort((a, b) => a - b);
+      }
+    }
+
+    return [new Date().getDay()];
+  }, [selectedLine, lines]);
 
   const weeklyCycles = useMemo(() => {
     if (!earliestAnchorDate) return [];
     const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
 
-    let currStart = new Date(earliestAnchorDate);
-    if (isNaN(currStart.getTime())) return [];
+    // Adjust weekStart to Monday of earliestAnchorDate week
+    let weekStart = new Date(earliestAnchorDate);
+    if (isNaN(weekStart.getTime())) return [];
+
+    const dayNum = weekStart.getDay();
+    const distToMon = (dayNum + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - distToMon);
 
     const now = new Date();
-    let index = 1;
+    let weekIndex = 1;
+    const dayNameMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     const formatFilterDate = (dStr: string) => {
       if (!dStr) return "All";
@@ -123,48 +190,55 @@ function ExpensesPage() {
       }
     };
 
-    while (index <= 156) {
-      const currEnd = new Date(currStart);
-      currEnd.setDate(currEnd.getDate() + 6);
+    while (weekIndex <= 156) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
 
-      const fromStr = currStart.toISOString().slice(0, 10);
-      const toStr = currEnd.toISOString().slice(0, 10);
-      const isCurrent = today >= fromStr && today <= toStr;
+      const weekFromStr = weekStart.toISOString().slice(0, 10);
+      const weekToStr = weekEnd.toISOString().slice(0, 10);
 
-      cycles.push({
-        index,
-        label: `Week ${index}: ${formatFilterDate(fromStr)} – ${formatFilterDate(toStr)}${isCurrent ? " (Active)" : ""}`,
-        dateFrom: fromStr,
-        dateTo: toStr,
-        isCurrent,
+      activeTargetDaysOfWeek.forEach((dNum) => {
+        const cycleDate = new Date(weekStart);
+        const offsetFromMon = (dNum + 6) % 7;
+        cycleDate.setDate(cycleDate.getDate() + offsetFromMon);
+
+        const dateStr = cycleDate.toISOString().slice(0, 10);
+        const isCurrent = today === dateStr || (today >= weekFromStr && today <= weekToStr);
+        const dayLabel = dayNameMap[dNum];
+
+        cycles.push({
+          index: cycles.length + 1,
+          label: activeTargetDaysOfWeek.length > 1
+            ? `Week ${weekIndex} (${dayLabel}): ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`
+            : `Week ${weekIndex}: ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`,
+          dateFrom: dateStr,
+          dateTo: dateStr,
+          isCurrent,
+        });
       });
 
-      if (currStart > now) break;
+      if (weekStart > now) break;
 
-      currStart = new Date(currEnd);
-      currStart.setDate(currStart.getDate() + 1);
-      index++;
+      weekStart.setDate(weekStart.getDate() + 7);
+      weekIndex++;
     }
 
     return cycles;
-  }, [earliestAnchorDate, today]);
+  }, [earliestAnchorDate, activeTargetDaysOfWeek, today]);
 
-  // Auto-select current active week cycle on initial load
+  const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
+
+  // Auto-select current active week cycle whenever weeklyCycles loads/updates
   useEffect(() => {
-    if (weeklyCycles.length > 0 && selectedCycleIndex === null) {
-      const currentCycle = weeklyCycles.find((c) => c.isCurrent);
+    if (weeklyCycles.length > 0 && !hasUserManuallySelectedCycle) {
+      const currentCycle = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
       if (currentCycle) {
         setSelectedCycleIndex(currentCycle.index);
         setDateFrom(currentCycle.dateFrom);
         setDateTo(currentCycle.dateTo);
-      } else {
-        const lastCycle = weeklyCycles[weeklyCycles.length - 1];
-        setSelectedCycleIndex(lastCycle.index);
-        setDateFrom(lastCycle.dateFrom);
-        setDateTo(lastCycle.dateTo);
       }
     }
-  }, [weeklyCycles]);
+  }, [weeklyCycles, hasUserManuallySelectedCycle]);
 
   const handleSelectCycle = (index: number) => {
     const cycle = weeklyCycles.find((c) => c.index === index);
@@ -172,6 +246,7 @@ function ExpensesPage() {
       setSelectedCycleIndex(cycle.index);
       setDateFrom(cycle.dateFrom);
       setDateTo(cycle.dateTo);
+      setHasUserManuallySelectedCycle(true);
     }
   };
 
@@ -274,6 +349,7 @@ function ExpensesPage() {
   const formatDateLabel = () => {
     if (!dateFrom && !dateTo) return "All Time";
     if (dateFrom === dateTo) return dateFrom === getTodayStr() ? "Today" : dateFrom;
+    if (selectedCycleIndex !== null) return dateFrom;
     return `${dateFrom || "Start"} to ${dateTo || "End"}`;
   };
 
@@ -665,12 +741,12 @@ function AddExpenseModal({
           {lines.length > 0 && (
             <div>
               <label className="text-xs font-semibold">Route Line (Optional)</label>
-              <Select value={selectedLineId} onValueChange={(v) => setSelectedLineId(v)}>
+              <Select value={selectedLineId || "none"} onValueChange={(v) => setSelectedLineId(v === "none" ? "" : v)}>
                 <SelectTrigger className="mt-1 text-xs">
                   <SelectValue placeholder="All Lines / General Workspace" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">General Workspace (No specific line)</SelectItem>
+                  <SelectItem value="none">General Workspace (No specific line)</SelectItem>
                   {lines.map((l) => (
                     <SelectItem key={l.public_id} value={l.public_id}>
                       📍 {l.name}

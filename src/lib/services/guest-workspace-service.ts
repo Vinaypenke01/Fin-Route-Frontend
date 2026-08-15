@@ -81,6 +81,9 @@ export interface CashReconciliation {
   collections_count: number;
   capital_total: number;
   capital_count: number;
+  today_capital_total?: number;
+  opening_carried_forward?: number;
+  is_carried_forward?: boolean;
   disbursements_total: number;
   disbursements_count: number;
   expenses_total: number;
@@ -456,7 +459,7 @@ export const guestWorkspaceService = {
   },
 
   // ─── Capital Entries & Daily Cash Reconciliation ──────────────────────────────
-  async recordCapital(payload: { entry_date: string; amount: number; remarks?: string }): Promise<CapitalEntry> {
+  async recordCapital(payload: { entry_date: string; amount: number; remarks?: string; line?: string }): Promise<CapitalEntry> {
     const res = await apiRequest<CapitalEntry>("/app/capital/", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -554,8 +557,12 @@ export const guestWorkspaceService = {
     return res.data;
   },
 
-  async deleteLine(id: string): Promise<void> {
-    await apiRequest(`/app/lines/${id}/`, { method: "DELETE" });
+  async deleteLine(id: string, options?: { mode?: "reassign" | "delete_customers" | "unassign"; targetLineId?: string }): Promise<void> {
+    const params = new URLSearchParams();
+    if (options?.mode) params.append("mode", options.mode);
+    if (options?.targetLineId) params.append("target_line", options.targetLineId);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    await apiRequest(`/app/lines/${id}/${query}`, { method: "DELETE" });
   },
 
   async getAvailablePortions(excludeLineId?: string): Promise<Record<string, string[]>> {

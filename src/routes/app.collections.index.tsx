@@ -17,6 +17,7 @@ import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
 import { DailyCashReconciliationCard } from "@/components/daily-cash-reconciliation-card";
 import { LineSetupDialog } from "@/components/line-setup-dialog";
+import { DeleteLineDialog } from "@/components/delete-line-dialog";
 import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loaders";
 
 export const Route = createFileRoute("/app/collections/")({
@@ -190,6 +191,16 @@ function CollectionsPage() {
 
   const isSelectedDateToday = selectedDate === today;
 
+  // Line / Route State
+  const [lines, setLines] = useState<CollectionLine[]>([]);
+  const [selectedLine, setSelectedLine] = useState<string>("all");
+  const [selectedPortion, setSelectedPortion] = useState<string>("all");
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
+
+  const [deleteLineTarget, setDeleteLineTarget] = useState<CollectionLine | null>(null);
+  const [isDeleteLineDialogOpen, setIsDeleteLineDialogOpen] = useState(false);
+
   const [collections, setCollections] = useState<Collection[]>([]);
   const [routeCustomers, setRouteCustomers] = useState<Customer[]>([]);
   const [loadingCollections, setLoadingCollections] = useState<boolean>(true);
@@ -214,61 +225,126 @@ function CollectionsPage() {
         earliest = cd;
       }
     });
-    return earliest;
-  }, [routeCustomers, collections]);
+
+    // Ensure we include at least 12 past weeks prior to today so lender can always navigate back to past weeks
+    const pastBoundary = new Date();
+    pastBoundary.setDate(pastBoundary.getDate() - 84);
+    const pastBoundaryStr = pastBoundary.toISOString().slice(0, 10);
+
+    return earliest < pastBoundaryStr ? earliest : pastBoundaryStr;
+  }, [routeCustomers, collections, today]);
+
+  const activeTargetDaysOfWeek = useMemo<number[]>(() => {
+    const map: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    if (selectedDay && selectedDay !== "all" && map[selectedDay.toLowerCase()] !== undefined) {
+      return [map[selectedDay.toLowerCase()]];
+    }
+
+    if (selectedLine && selectedLine !== "all") {
+      const activeLineObj = lines.find((l) => l.public_id === selectedLine);
+      const days: number[] = (activeLineObj?.day_schedules || [])
+        .map((s: any) => map[s.day_of_week.toLowerCase()])
+        .filter((d: any): d is number => typeof d === "number");
+
+      if (days.length > 0) {
+        return Array.from(new Set<number>(days)).sort((a: number, b: number) => a - b);
+      }
+    }
+
+    if (configuredDays.length > 0) {
+      const days: number[] = configuredDays
+        .map((d: any) => map[d.toLowerCase()])
+        .filter((d: any): d is number => typeof d === "number");
+      if (days.length > 0) {
+        return Array.from(new Set<number>(days)).sort((a: number, b: number) => a - b);
+      }
+    }
+
+    return [new Date().getDay()];
+  }, [selectedDay, selectedLine, lines, configuredDays]);
 
   const weeklyCycles = useMemo(() => {
     if (!earliestAnchorDate) return [];
     const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
-    
-    let currStart = new Date(earliestAnchorDate);
-    if (isNaN(currStart.getTime())) return [];
+
+    // Adjust weekStart to Monday of earliestAnchorDate week
+    let weekStart = new Date(earliestAnchorDate);
+    if (isNaN(weekStart.getTime())) return [];
+
+    const dayNum = weekStart.getDay();
+    const distToMon = (dayNum + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - distToMon);
 
     const now = new Date();
-    let index = 1;
+    let weekIndex = 1;
+    const dayNameMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    while (index <= 156) {
-      const currEnd = new Date(currStart);
-      currEnd.setDate(currEnd.getDate() + 6);
+    while (weekIndex <= 156) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
 
-      const fromStr = currStart.toISOString().slice(0, 10);
-      const toStr = currEnd.toISOString().slice(0, 10);
-      const isCurrent = today >= fromStr && today <= toStr;
+      const weekFromStr = weekStart.toISOString().slice(0, 10);
+      const weekToStr = weekEnd.toISOString().slice(0, 10);
 
-      cycles.push({
-        index,
-        label: `Week ${index}: ${formatFilterDate(fromStr)} – ${formatFilterDate(toStr)}${isCurrent ? " (Active)" : ""}`,
-        dateFrom: fromStr,
-        dateTo: toStr,
-        isCurrent,
+      activeTargetDaysOfWeek.forEach((dNum) => {
+        const cycleDate = new Date(weekStart);
+        const offsetFromMon = (dNum + 6) % 7;
+        cycleDate.setDate(cycleDate.getDate() + offsetFromMon);
+
+        const dateStr = cycleDate.toISOString().slice(0, 10);
+        const isCurrent = today === dateStr || (today >= weekFromStr && today <= weekToStr);
+        const dayLabel = dayNameMap[dNum];
+
+        cycles.push({
+          index: cycles.length + 1,
+          label: activeTargetDaysOfWeek.length > 1
+            ? `Week ${weekIndex} (${dayLabel}): ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`
+            : `Week ${weekIndex}: ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`,
+          dateFrom: dateStr,
+          dateTo: dateStr,
+          isCurrent,
+        });
       });
 
-      if (currStart > now) break;
+      if (weekStart > now) break;
 
-      currStart = new Date(currEnd);
-      currStart.setDate(currStart.getDate() + 1);
-      index++;
+      weekStart.setDate(weekStart.getDate() + 7);
+      weekIndex++;
     }
 
     return cycles;
-  }, [earliestAnchorDate]);
+  }, [earliestAnchorDate, activeTargetDaysOfWeek, today]);
 
-  // Auto-select current active week cycle on initial load
+  const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
+
+  // Auto-select current active week cycle whenever weeklyCycles loads/updates
   useEffect(() => {
-    if (weeklyCycles.length > 0 && selectedCycleIndex === null) {
-      const currentCycle = weeklyCycles.find((c) => c.isCurrent);
+    if (weeklyCycles.length > 0 && !hasUserManuallySelectedCycle) {
+      const currentCycle = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
       if (currentCycle) {
         setSelectedCycleIndex(currentCycle.index);
         setDateFrom(currentCycle.dateFrom);
         setDateTo(currentCycle.dateTo);
-      } else {
-        const lastCycle = weeklyCycles[weeklyCycles.length - 1];
-        setSelectedCycleIndex(lastCycle.index);
-        setDateFrom(lastCycle.dateFrom);
-        setDateTo(lastCycle.dateTo);
+        setSelectedDate(currentCycle.dateFrom);
       }
     }
-  }, [weeklyCycles]);
+  }, [weeklyCycles, hasUserManuallySelectedCycle]);
+
+  // Sync selectedDate with dateFrom when a week cycle is active
+  useEffect(() => {
+    if (dateFrom && selectedCycleIndex !== null) {
+      setSelectedDate(dateFrom);
+    }
+  }, [dateFrom, selectedCycleIndex]);
 
   const handleSelectCycle = (index: number) => {
     const cycle = weeklyCycles.find((c) => c.index === index);
@@ -276,6 +352,8 @@ function CollectionsPage() {
       setSelectedCycleIndex(cycle.index);
       setDateFrom(cycle.dateFrom);
       setDateTo(cycle.dateTo);
+      setSelectedDate(cycle.dateFrom);
+      setHasUserManuallySelectedCycle(true);
     }
   };
 
@@ -294,7 +372,7 @@ function CollectionsPage() {
   };
 
   const handlePresetCurrentWeek = () => {
-    const active = weeklyCycles.find((c) => c.isCurrent);
+    const active = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
     if (active) {
       handleSelectCycle(active.index);
     } else {
@@ -352,15 +430,9 @@ function CollectionsPage() {
   const formatDateRangeLabel = () => {
     if (!dateFrom && !dateTo) return "All Time";
     if (dateFrom === dateTo) return dateFrom === today ? "Today" : formatFilterDate(dateFrom);
+    if (selectedCycleIndex !== null) return formatFilterDate(dateFrom);
     return `${formatFilterDate(dateFrom)} to ${formatFilterDate(dateTo)}`;
   };
-
-  // Line / Route State
-  const [lines, setLines] = useState<CollectionLine[]>([]);
-  const [selectedLine, setSelectedLine] = useState<string>("all");
-  const [selectedPortion, setSelectedPortion] = useState<string>("all");
-  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
-  const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
 
   const loadLines = async () => {
     try {
@@ -441,6 +513,24 @@ function CollectionsPage() {
     loadLines();
   }, []);
 
+  // Auto-sync selectedPortion whenever selected date or selected line changes
+  useEffect(() => {
+    if (!dateFrom || selectedLine === "all") return;
+
+    const dObj = new Date(dateFrom);
+    if (isNaN(dObj.getTime())) return;
+
+    const targetDayName = dObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+    const activeLineObj = lines.find((l) => l.public_id === selectedLine);
+    const daySched = activeLineObj?.day_schedules?.find(
+      (s) => s.day_of_week.toLowerCase() === targetDayName
+    );
+
+    if (daySched?.portion && daySched.portion !== "both") {
+      setSelectedPortion(daySched.portion);
+    }
+  }, [dateFrom, selectedLine, lines]);
+
   useEffect(() => {
     loadCollections();
   }, [dateFrom, dateTo, selectedLine, selectedPortion]);
@@ -448,11 +538,20 @@ function CollectionsPage() {
   const loadRouteCustomers = async () => {
     setLoadingCustomers(true);
     try {
+      let dayFilter: string | undefined = selectedDay === "all" ? undefined : selectedDay;
+      if (dateFrom && (selectedCycleIndex !== null || dateFrom !== today)) {
+        const dObj = new Date(dateFrom);
+        if (!isNaN(dObj.getTime())) {
+          dayFilter = dObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+        }
+      }
+
       const res = await guestWorkspaceService.getCustomers({
         status: "active",
-        collection_day: selectedDay === "all" ? undefined : selectedDay,
+        collection_day: dayFilter,
         line: selectedLine === "all" ? undefined : selectedLine,
         portion: selectedPortion === "all" ? undefined : selectedPortion,
+        page_size: 1000,
       });
       setRouteCustomers(res.data || []);
     } catch (err) {
@@ -464,7 +563,7 @@ function CollectionsPage() {
 
   useEffect(() => {
     loadRouteCustomers();
-  }, [selectedDay, selectedLine, selectedPortion]);
+  }, [selectedDay, selectedLine, selectedPortion, dateFrom, selectedCycleIndex]);
 
   const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const isSingleDayPlan = configuredDays.length === 1;
@@ -713,16 +812,10 @@ function CollectionsPage() {
                         size="icon"
                         className="size-6 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-md"
                         title="Delete Line"
-                        onClick={async (e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`Are you sure you want to delete line "${ln.name}"?`)) {
-                            try {
-                              await guestWorkspaceService.deleteLine(ln.public_id);
-                              await loadLines();
-                            } catch (err: any) {
-                              alert(err?.message || "Failed to delete line");
-                            }
-                          }
+                          setDeleteLineTarget(ln);
+                          setIsDeleteLineDialogOpen(true);
                         }}
                       >
                         <Trash2 className="size-3" />
@@ -814,6 +907,17 @@ function CollectionsPage() {
           loadLines();
           loadCollections();
           loadRouteCustomers();
+        }}
+      />
+
+      <DeleteLineDialog
+        open={isDeleteLineDialogOpen}
+        onOpenChange={setIsDeleteLineDialogOpen}
+        line={deleteLineTarget}
+        allLines={lines}
+        customersCount={routeCustomers.filter(c => (c as any).line_public_id === deleteLineTarget?.public_id || (c as any).line_id === deleteLineTarget?.public_id || (c as any).line === deleteLineTarget?.name || (c as any).line_name === deleteLineTarget?.name).length}
+        onSuccess={async () => {
+          await Promise.all([loadLines(), loadRouteCustomers()]);
         }}
       />
 
@@ -1287,6 +1391,7 @@ function CollectionsPage() {
           customer={markingPaidCustomer}
           open={Boolean(markingPaidCustomer)}
           setOpen={(v) => !v && setMarkingPaidCustomer(null)}
+          initialCollectionDate={selectedDate}
           onSuccess={() => {
             setMarkingPaidCustomer(null);
             loadRouteCustomers();
@@ -1394,16 +1499,18 @@ function MarkAsPaidModal({
   customer,
   open,
   setOpen,
+  initialCollectionDate,
   onSuccess,
 }: {
   customer: Customer;
   open: boolean;
   setOpen: (v: boolean) => void;
+  initialCollectionDate?: string;
   onSuccess: () => void;
 }) {
   const defaultAmount = customer.installment_amount || customer.loan_amount || 0;
 
-  const [collectionDate, setCollectionDate] = useState<string>(today);
+  const [collectionDate, setCollectionDate] = useState<string>(initialCollectionDate || today);
   const [expectedAmount, setExpectedAmount] = useState<number>(defaultAmount);
   const [collectedAmount, setCollectedAmount] = useState<number>(defaultAmount);
   const [paymentModes, setPaymentModes] = useState<MasterItem[]>([]);
@@ -1412,7 +1519,6 @@ function MarkAsPaidModal({
   const [selectedStatus, setSelectedStatus] = useState<number>(1);
   const [remarks, setRemarks] = useState<string>("");
 
-  const [isCollectedToday, setIsCollectedToday] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1431,8 +1537,11 @@ function MarkAsPaidModal({
         console.error("Master load error:", err);
       }
     }
-    if (open) loadMasters();
-  }, [open]);
+    if (open) {
+      loadMasters();
+      setCollectionDate(initialCollectionDate || today);
+    }
+  }, [open, initialCollectionDate]);
 
   const currentStatusObj = statuses.find((s) => s.id === selectedStatus);
   const isSkippedSelected = currentStatusObj?.code === "skipped" || currentStatusObj?.name?.toLowerCase().includes("skipped");
@@ -1451,7 +1560,6 @@ function MarkAsPaidModal({
         status: selectedStatus,
         payment_mode: isSkippedSelected ? undefined : selectedPaymentMode,
         remarks,
-        is_collected_today: isCollectedToday,
       });
 
       setOpen(false);
@@ -1501,35 +1609,6 @@ function MarkAsPaidModal({
               <span>Disbursed: <span className="font-mono text-foreground font-semibold">{customer.start_date ? formatFilterDate(customer.start_date) : "-"}</span></span>
               <span>Outstanding: <span className="font-mono font-bold text-primary">{inr(customer.outstanding_balance || 0)}</span></span>
             </div>
-          </div>
-
-          <div>
-            <Label className="text-xs font-semibold">Collection Timing *</Label>
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={isCollectedToday ? "default" : "outline"}
-                className={isCollectedToday ? "bg-emerald-600 text-white hover:bg-emerald-700 h-8 text-xs font-bold" : "h-8 text-xs"}
-                onClick={() => setIsCollectedToday(true)}
-              >
-                Collected Today
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={!isCollectedToday ? "secondary" : "outline"}
-                className={!isCollectedToday ? "bg-muted-foreground/20 font-bold h-8 text-xs" : "h-8 text-xs"}
-                onClick={() => setIsCollectedToday(false)}
-              >
-                Past Collection
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {isCollectedToday
-                ? "Included in Reports calculations & daily net revenue figures."
-                : "Stored for passbook history, but excluded from Reports revenue calculations."}
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
