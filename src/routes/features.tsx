@@ -59,7 +59,7 @@ function FeaturesPage() {
       <SiteHeader />
       <main>
         <PageHeader eyebrow="Features" title="Everything you need to run finance" description="One workspace for customers, loans, collections, routes, expenses and reports." />
-        <Features withHeader={false} />
+        <Features />
         <CTA />
       </main>
       <SiteFooter />
