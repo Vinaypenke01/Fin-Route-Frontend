@@ -255,11 +255,11 @@ function CustomersPage() {
     loadCustomers();
   }, [q, status, selectedDay, selectedLine, selectedPortion]);
 
-  const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const configuredDaysFromLines = Array.from(
     new Set(lines.flatMap((l) => l.day_schedules?.map((s) => s.day_of_week.toLowerCase()) || []))
   );
-  const effectiveConfiguredDays = configuredDays.length > 0 ? configuredDays : configuredDaysFromLines;
+  const combinedActiveDays = Array.from(new Set([...configuredDays, ...configuredDaysFromLines]));
+  const effectiveConfiguredDays = combinedActiveDays.length > 0 ? combinedActiveDays : ["monday"];
   const isDaysSaved = effectiveConfiguredDays.length > 0 || lines.length > 0;
 
   const handleToggleDraftDay = (dayKey: string) => {
@@ -926,7 +926,8 @@ function CustomersPage() {
           customer={editingCustomer}
           open={Boolean(editingCustomer)}
           setOpen={(v) => !v && setEditingCustomer(null)}
-          configuredDays={configuredDays}
+          configuredDays={effectiveConfiguredDays}
+          lines={lines}
           onSuccess={() => {
             setEditingCustomer(null);
             loadCustomers();
@@ -1519,6 +1520,7 @@ function EditCustomerModal({
   open,
   setOpen,
   configuredDays = ["monday"],
+  lines = [],
   onSuccess,
   onDeleteRequest,
 }: {
@@ -1526,16 +1528,35 @@ function EditCustomerModal({
   open: boolean;
   setOpen: (v: boolean) => void;
   configuredDays?: string[];
+  lines?: CollectionLine[];
   onSuccess: () => void;
   onDeleteRequest: (c: Customer) => void;
 }) {
+  // Find customer's line schedule days if assigned to a line
+  const customerLineObj = lines.find(
+    (l) => l.public_id === customer.line || l.public_id === customer.line_public_id || l.name === customer.line_name
+  );
+  const lineScheduleDays = (customerLineObj?.day_schedules || []).map((s) => s.day_of_week.toLowerCase());
+  
+  // Available days for dropdown: prioritize line schedule days if line assigned, otherwise all configured active days
+  const baseDays = lineScheduleDays.length > 0 ? lineScheduleDays : configuredDays;
+  const currentDay = (customer.collection_day || "").toLowerCase();
+  
+  // Combine base days + currentDay so existing collection day is preserved if valid
+  const availableDays = Array.from(new Set([...baseDays, ...configuredDays, currentDay].filter(Boolean)));
+  
+  // If currentDay is not valid for the line's schedule, default to line's first scheduled day
+  const initialDay = lineScheduleDays.length > 0 && !lineScheduleDays.includes(currentDay)
+    ? lineScheduleDays[0]
+    : currentDay || baseDays[0] || "monday";
+
   const [sequenceNumber, setSequenceNumber] = useState<number | "">(customer.sequence_number ?? "");
   const [fullName, setFullName] = useState(customer.full_name || "");
   const [mobileNumber, setMobileNumber] = useState((customer.mobile_number || "").replace(/^\+91/, ""));
   const [loanAmount, setLoanAmount] = useState(customer.loan_amount || 0);
   const [disbursedAmount, setDisbursedAmount] = useState(customer.disbursed_amount || 0);
   const [interestRate, setInterestRate] = useState(customer.interest_rate || 0);
-  const [collectionDay, setCollectionDay] = useState(customer.collection_day || "monday");
+  const [collectionDay, setCollectionDay] = useState(initialDay);
   const [status, setStatus] = useState(customer.status || "active");
 
   const [installmentsPaidCount, setInstallmentsPaidCount] = useState(customer.installments_paid_count || 0);
@@ -1625,7 +1646,7 @@ function EditCustomerModal({
               <Select value={collectionDay} onValueChange={setCollectionDay}>
                 <SelectTrigger className="mt-1 font-semibold text-primary"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {configuredDays.map((dKey) => {
+                  {availableDays.map((dKey) => {
                     const dayObj = ALL_DAYS_LIST.find((d) => d.key === dKey);
                     return (
                       <SelectItem key={dKey} value={dKey} className="capitalize font-medium">
