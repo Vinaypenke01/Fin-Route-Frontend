@@ -12,7 +12,7 @@ import { validatePassword, validateMobileNumber } from "@/lib/auth-validation";
 import { PasswordStrengthChecker } from "@/components/password-strength-checker";
 
 export const Route = createFileRoute("/register")({
-  head: () => ({ meta: [{ title: "Create your workspace — FinRoute" }, { name: "description", content: "Get your free digital collection book in 2 minutes." }] }),
+  head: () => ({ meta: [{ title: "Create your workspace — FinRoute" }, { name: "description", content: "Get your free digital collection book in 2 minutes." }], links: [{ rel: "canonical", href: "https://fin-route.site/register" }] }),
   component: RegisterPage,
 });
 

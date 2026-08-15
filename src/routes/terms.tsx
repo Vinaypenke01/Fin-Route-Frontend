@@ -3,12 +3,21 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PageHeader } from "@/components/marketing-sections";
 
+const OG_IMAGE = "https://fin-route.site/logo-removebg-preview%20(1).png";
+
 export const Route = createFileRoute("/terms")({
   head: () => ({
     meta: [
       { title: "Terms of Service — FinRoute" },
       { name: "description", content: "Terms of Service for FinRoute record management software." },
+      { property: "og:title", content: "Terms of Service — FinRoute" },
+      { property: "og:description", content: "Terms governing access to and use of the FinRoute digital record management platform." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://fin-route.site/terms" },
+      { property: "og:image", content: OG_IMAGE },
+      { name: "twitter:card", content: "summary" },
     ],
+    links: [{ rel: "canonical", href: "https://fin-route.site/terms" }],
   }),
   component: TermsPage,
 });

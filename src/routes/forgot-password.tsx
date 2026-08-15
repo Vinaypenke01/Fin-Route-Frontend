@@ -7,7 +7,7 @@ import { authService } from "@/lib/services/auth-service";
 import { Mail, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Forgot Password — FinRoute" }, { name: "description", content: "Reset your FinRoute password via Email OTP." }] }),
+  head: () => ({ meta: [{ title: "Forgot Password — FinRoute" }, { name: "description", content: "Reset your FinRoute password via Email OTP." }], links: [{ rel: "canonical", href: "https://fin-route.site/forgot-password" }] }),
   component: ForgotPage,
 });
 

@@ -3,12 +3,21 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PageHeader } from "@/components/marketing-sections";
 
+const OG_IMAGE = "https://fin-route.site/logo-removebg-preview%20(1).png";
+
 export const Route = createFileRoute("/platform-policies")({
   head: () => ({
     meta: [
       { title: "Platform Policies & Disclaimers — FinRoute" },
       { name: "description", content: "Subscription, Refund Policy, Acceptable Use, and Disclaimers for FinRoute." },
+      { property: "og:title", content: "Platform Policies & Disclaimers — FinRoute" },
+      { property: "og:description", content: "Subscription, cancellation, refund, acceptable use and operational disclaimers." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://fin-route.site/platform-policies" },
+      { property: "og:image", content: OG_IMAGE },
+      { name: "twitter:card", content: "summary" },
     ],
+    links: [{ rel: "canonical", href: "https://fin-route.site/platform-policies" }],
   }),
   component: PlatformPoliciesPage,
 });

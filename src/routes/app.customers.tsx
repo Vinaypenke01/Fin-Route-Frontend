@@ -256,7 +256,11 @@ function CustomersPage() {
   }, [q, status, selectedDay, selectedLine, selectedPortion]);
 
   const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
-  const isDaysSaved = configuredDays.length > 0;
+  const configuredDaysFromLines = Array.from(
+    new Set(lines.flatMap((l) => l.day_schedules?.map((s) => s.day_of_week.toLowerCase()) || []))
+  );
+  const effectiveConfiguredDays = configuredDays.length > 0 ? configuredDays : configuredDaysFromLines;
+  const isDaysSaved = effectiveConfiguredDays.length > 0 || lines.length > 0;
 
   const handleToggleDraftDay = (dayKey: string) => {
     setDaysError(null);
@@ -642,8 +646,9 @@ function CustomersPage() {
                 }}
                 open={isNewDialogOpen}
                 setOpen={setIsNewDialogOpen}
-                configuredDays={configuredDays}
-                defaultDay={selectedDay !== "all" ? selectedDay : configuredDays[0] || "monday"}
+                configuredDays={effectiveConfiguredDays}
+                defaultDay={selectedDay !== "all" ? selectedDay : effectiveConfiguredDays[0] || "monday"}
+                lines={lines}
               />
             )}
           </div>

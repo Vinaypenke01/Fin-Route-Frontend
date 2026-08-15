@@ -11,7 +11,9 @@ export const Route = createFileRoute("/verify-otp")({
     meta: [
       { title: "Verify Email OTP — FinRoute" },
       { name: "description", content: "Enter the 6-digit email verification code we sent to your email inbox." },
+      { name: "robots", content: "noindex" },
     ],
+    links: [{ rel: "canonical", href: "https://fin-route.site/verify-otp" }],
   }),
   component: OtpPage,
 });

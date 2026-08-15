@@ -1,0 +1,31 @@
+# Robots.txt for FinRoute — Daily Finance Collection & ERP Platform
+# Domains: https://fin-route.site | https://app.fin-route.site
+
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Allow: /pricing
+Allow: /features
+Allow: /faq
+Allow: /contact
+Allow: /loan-calculator
+Allow: /privacy
+Allow: /terms
+Allow: /platform-policies
+Allow: /guest-workspace
+
+# Disallow transient auth pages (OTP / password reset flows)
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-otp
+
+# Protect private workspace and admin areas from search engine indexing
+Disallow: /app/*
+Disallow: /erp/*
+Disallow: /field/*
+Disallow: /admin/*
+Disallow: /api/*
+
+Sitemap: https://fin-route.site/sitemap.xml
+Sitemap: https://app.fin-route.site/sitemap.xml

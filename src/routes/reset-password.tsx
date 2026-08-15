@@ -11,7 +11,7 @@ export const Route = createFileRoute("/reset-password")({
     mobile: (search.mobile as string) || "",
     email: (search.email as string) || "",
   }),
-  head: () => ({ meta: [{ title: "Reset Password — FinRoute" }, { name: "description", content: "Verify Email OTP and set a new password." }] }),
+  head: () => ({ meta: [{ title: "Reset Password — FinRoute" }, { name: "description", content: "Verify Email OTP and set a new password." }, { name: "robots", content: "noindex" }], links: [{ rel: "canonical", href: "https://fin-route.site/reset-password" }] }),
   component: ResetPage,
 });
 

@@ -11,7 +11,7 @@ import { validatePassword, validateMobileNumber } from "@/lib/auth-validation";
 import { PasswordStrengthChecker } from "@/components/password-strength-checker";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Log in — FinRoute" }, { name: "description", content: "Sign in to your FinRoute workspace." }] }),
+  head: () => ({ meta: [{ title: "Log in — FinRoute" }, { name: "description", content: "Sign in to your FinRoute workspace." }], links: [{ rel: "canonical", href: "https://fin-route.site/login" }] }),
   component: LoginPage,
 });
 

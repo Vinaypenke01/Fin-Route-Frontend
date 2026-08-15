@@ -4,8 +4,10 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useLocation,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { trackPageView } from "@/lib/analytics";
 
 import appCss from "../styles.css?url";
 import { reportAppError } from "../lib/error-reporting";
@@ -106,6 +108,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const location = useLocation();
+
+  // ── GA4: track every SPA route change as a page_view ──────────────────
+  useEffect(() => {
+    // document.title may not yet reflect the new route title on first tick;
+    // a small timeout lets TanStack Router flush the new <title> first.
+    const id = setTimeout(() => {
+      trackPageView(location.pathname, document.title);
+    }, 50);
+    return () => clearTimeout(id);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -3,12 +3,21 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PageHeader } from "@/components/marketing-sections";
 
+const OG_IMAGE = "https://fin-route.site/logo-removebg-preview%20(1).png";
+
 export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
       { title: "Privacy Policy — FinRoute" },
       { name: "description", content: "Privacy Policy for FinRoute software platform and services." },
+      { property: "og:title", content: "Privacy Policy — FinRoute" },
+      { property: "og:description", content: "How FinRoute collects, uses, stores and protects your data." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://fin-route.site/privacy" },
+      { property: "og:image", content: OG_IMAGE },
+      { name: "twitter:card", content: "summary" },
     ],
+    links: [{ rel: "canonical", href: "https://fin-route.site/privacy" }],
   }),
   component: PrivacyPage,
 });
