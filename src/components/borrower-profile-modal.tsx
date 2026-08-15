@@ -119,9 +119,35 @@ export function BorrowerProfileDetailsModal({
       ]);
       if (freshCust) setDetail(freshCust);
 
-      const items = Array.isArray(collectionsRes.data)
+      let items: Collection[] = Array.isArray(collectionsRes.data)
         ? collectionsRes.data
         : (collectionsRes as any)?.results || (collectionsRes as any)?.data?.results || [];
+
+      // Virtualize opening balance installment history if borrower has paid count > 0 but 0 database records exist
+      const targetCust = freshCust || customer;
+      const paidCount = Number(targetCust.installments_paid_count || 0);
+      const instAmt = Number(targetCust.installment_amount || (Number(targetCust.total_due || 0) / (targetCust.total_installments || 1)));
+
+      if (items.length === 0 && paidCount > 0 && instAmt > 0) {
+        const openingDate = targetCust.start_date || new Date().toISOString().split("T")[0];
+        items = Array.from({ length: paidCount }, (_, i) => ({
+          public_id: `opening-${targetCust.public_id}-${i + 1}`,
+          receipt_number: `INIT-OPEN-${i + 1}`,
+          customer_code: targetCust.customer_code,
+          customer_name: targetCust.full_name,
+          customer_public_id: targetCust.public_id,
+          collection_date: openingDate,
+          expected_amount: instAmt,
+          collected_amount: instAmt,
+          status: 1,
+          status_code: "paid",
+          status_name: "Paid",
+          payment_mode: 1,
+          payment_mode_name: "Cash",
+          remarks: `Opening balance installment #${i + 1} paid for existing borrower`,
+          created_at: targetCust.created_at || openingDate,
+        }));
+      }
 
       setHistory(items);
     } catch (err) {
