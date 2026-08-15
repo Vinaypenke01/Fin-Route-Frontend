@@ -255,6 +255,7 @@ function CustomersPage() {
     loadCustomers();
   }, [q, status, selectedDay, selectedLine, selectedPortion]);
 
+  const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const configuredDaysFromLines = Array.from(
     new Set(lines.flatMap((l) => l.day_schedules?.map((s) => s.day_of_week.toLowerCase()) || []))
   );
