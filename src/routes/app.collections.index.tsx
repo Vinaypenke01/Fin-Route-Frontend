@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2 } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2, ChevronLeft, ChevronRight, SlidersHorizontal, Clock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
@@ -181,10 +181,14 @@ function CollectionsPage() {
   const [configuredDays, setConfiguredDays] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<string>("all");
 
-  // Date Range Filtration
+  // Date & Cycle Filtration State
   const [dateFrom, setDateFrom] = useState<string>(today);
   const [dateTo, setDateTo] = useState<string>(today);
   const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
+  const [selectedCycleIndex, setSelectedCycleIndex] = useState<number | null>(null);
+
+  const isSelectedDateToday = selectedDate === today;
 
   const [collections, setCollections] = useState<Collection[]>([]);
   const [routeCustomers, setRouteCustomers] = useState<Customer[]>([]);
@@ -196,24 +200,123 @@ function CollectionsPage() {
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
   const [extendingCustomer, setExtendingCustomer] = useState<Customer | null>(null);
 
-  const isSelectedDateToday = selectedDate === today;
+  // ─── Earliest Anchor Date & Weekly Cycles Calculation ───────────────────────
+  const earliestAnchorDate = useMemo(() => {
+    let earliest = today;
+    routeCustomers.forEach((c) => {
+      if (c.start_date && c.start_date.slice(0, 10) < earliest) {
+        earliest = c.start_date.slice(0, 10);
+      }
+    });
+    collections.forEach((col) => {
+      const cd = col.collection_date ? String(col.collection_date).slice(0, 10) : "";
+      if (cd && cd < earliest) {
+        earliest = cd;
+      }
+    });
+    return earliest;
+  }, [routeCustomers, collections]);
+
+  const weeklyCycles = useMemo(() => {
+    if (!earliestAnchorDate) return [];
+    const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
+    
+    let currStart = new Date(earliestAnchorDate);
+    if (isNaN(currStart.getTime())) return [];
+
+    const now = new Date();
+    let index = 1;
+
+    while (index <= 156) {
+      const currEnd = new Date(currStart);
+      currEnd.setDate(currEnd.getDate() + 6);
+
+      const fromStr = currStart.toISOString().slice(0, 10);
+      const toStr = currEnd.toISOString().slice(0, 10);
+      const isCurrent = today >= fromStr && today <= toStr;
+
+      cycles.push({
+        index,
+        label: `Week ${index}: ${formatFilterDate(fromStr)} – ${formatFilterDate(toStr)}${isCurrent ? " (Active)" : ""}`,
+        dateFrom: fromStr,
+        dateTo: toStr,
+        isCurrent,
+      });
+
+      if (currStart > now) break;
+
+      currStart = new Date(currEnd);
+      currStart.setDate(currStart.getDate() + 1);
+      index++;
+    }
+
+    return cycles;
+  }, [earliestAnchorDate]);
+
+  // Auto-select current active week cycle on initial load
+  useEffect(() => {
+    if (weeklyCycles.length > 0 && selectedCycleIndex === null) {
+      const currentCycle = weeklyCycles.find((c) => c.isCurrent);
+      if (currentCycle) {
+        setSelectedCycleIndex(currentCycle.index);
+        setDateFrom(currentCycle.dateFrom);
+        setDateTo(currentCycle.dateTo);
+      } else {
+        const lastCycle = weeklyCycles[weeklyCycles.length - 1];
+        setSelectedCycleIndex(lastCycle.index);
+        setDateFrom(lastCycle.dateFrom);
+        setDateTo(lastCycle.dateTo);
+      }
+    }
+  }, [weeklyCycles]);
+
+  const handleSelectCycle = (index: number) => {
+    const cycle = weeklyCycles.find((c) => c.index === index);
+    if (cycle) {
+      setSelectedCycleIndex(cycle.index);
+      setDateFrom(cycle.dateFrom);
+      setDateTo(cycle.dateTo);
+    }
+  };
+
+  const handlePrevWeek = () => {
+    const currentIdx = selectedCycleIndex || 1;
+    if (currentIdx > 1) {
+      handleSelectCycle(currentIdx - 1);
+    }
+  };
+
+  const handleNextWeek = () => {
+    const currentIdx = selectedCycleIndex || 1;
+    if (currentIdx < weeklyCycles.length) {
+      handleSelectCycle(currentIdx + 1);
+    }
+  };
+
+  const handlePresetCurrentWeek = () => {
+    const active = weeklyCycles.find((c) => c.isCurrent);
+    if (active) {
+      handleSelectCycle(active.index);
+    } else {
+      handlePresetThisWeek();
+    }
+  };
 
   const handlePresetToday = () => {
     setDateFrom(today);
     setDateTo(today);
     setSelectedDate(today);
+    setSelectedCycleIndex(null);
   };
 
   const handlePresetYesterday = () => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const yStr = `${year}-${month}-${day}`;
+    const yStr = d.toISOString().slice(0, 10);
     setDateFrom(yStr);
     setDateTo(yStr);
     setSelectedDate(yStr);
+    setSelectedCycleIndex(null);
   };
 
   const handlePresetThisWeek = () => {
@@ -222,13 +325,10 @@ function CollectionsPage() {
     const distanceToMon = (dayOfWeek + 6) % 7;
     const monday = new Date(now);
     monday.setDate(now.getDate() - distanceToMon);
-    const year = monday.getFullYear();
-    const month = String(monday.getMonth() + 1).padStart(2, "0");
-    const day = String(monday.getDate()).padStart(2, "0");
-
-    setDateFrom(`${year}-${month}-${day}`);
+    setDateFrom(monday.toISOString().slice(0, 10));
     setDateTo(today);
     setSelectedDate(today);
+    setSelectedCycleIndex(null);
   };
 
   const handlePresetThisMonth = () => {
@@ -238,12 +338,14 @@ function CollectionsPage() {
     setDateFrom(`${year}-${month}-01`);
     setDateTo(today);
     setSelectedDate(today);
+    setSelectedCycleIndex(null);
   };
 
   const handleResetDates = () => {
     setDateFrom(today);
     setDateTo(today);
     setSelectedDate(today);
+    setSelectedCycleIndex(null);
     setQ("");
   };
 
@@ -251,7 +353,9 @@ function CollectionsPage() {
     if (!dateFrom && !dateTo) return "All Time";
     if (dateFrom === dateTo) return dateFrom === today ? "Today" : formatFilterDate(dateFrom);
     return `${formatFilterDate(dateFrom)} to ${formatFilterDate(dateTo)}`;
-  };  // Line / Route State
+  };
+
+  // Line / Route State
   const [lines, setLines] = useState<CollectionLine[]>([]);
   const [selectedLine, setSelectedLine] = useState<string>("all");
   const [selectedPortion, setSelectedPortion] = useState<string>("all");
@@ -264,16 +368,28 @@ function CollectionsPage() {
       const loadedLines = data || [];
       setLines(loadedLines);
 
-      // Auto-select line that includes today's current day of the week by default
+      // Auto-select line & portion matching today's day of week & time session
       const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      const currentHour = new Date().getHours();
+      const currentSessionPortion: "morning" | "afternoon" = currentHour < 13 ? "morning" : "afternoon";
+
       const lineForToday = loadedLines.find((ln) =>
         ln.day_schedules?.some((s) => s.day_of_week.toLowerCase() === currentDayName)
       );
 
       if (lineForToday) {
         setSelectedLine(lineForToday.public_id);
+        const todaySched = lineForToday.day_schedules?.find(
+          (s) => s.day_of_week.toLowerCase() === currentDayName
+        );
+        if (todaySched?.portion && todaySched.portion !== "both") {
+          setSelectedPortion(todaySched.portion);
+        } else {
+          setSelectedPortion(currentSessionPortion);
+        }
       } else if (loadedLines.length > 0) {
         setSelectedLine(loadedLines[0].public_id);
+        setSelectedPortion(currentSessionPortion);
       }
     } catch (err) {
       console.error("Failed to load lines:", err);
@@ -701,28 +817,42 @@ function CollectionsPage() {
         }}
       />
 
-      {/* 2. Date Range & Preset Filter Bar */}
+      {/* 2. Smart Weekly Collection Cycle Navigation Bar */}
       <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
           <div className="flex items-center gap-2">
             <Calendar className="size-4 text-primary" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Date Range & Date Filtration</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Weekly Collection Cycles</h3>
             <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
               {formatDateRangeLabel()}
             </Badge>
           </div>
+
           <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              size="sm"
+              variant={selectedCycleIndex !== null && weeklyCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
+              onClick={handlePresetCurrentWeek}
+              className="h-7 text-[11px] px-2.5 font-bold"
+            >
+              Current Week (Active)
+            </Button>
             <Button size="sm" variant={dateFrom === today && dateTo === today ? "default" : "outline"} onClick={handlePresetToday} className="h-7 text-[11px] px-2.5">
               Today
             </Button>
             <Button size="sm" variant="outline" onClick={handlePresetYesterday} className="h-7 text-[11px] px-2.5">
               Yesterday
             </Button>
-            <Button size="sm" variant="outline" onClick={handlePresetThisWeek} className="h-7 text-[11px] px-2.5">
-              This Week
-            </Button>
             <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5">
               This Month
+            </Button>
+            <Button
+              size="sm"
+              variant={showCustomRange ? "secondary" : "outline"}
+              onClick={() => setShowCustomRange(!showCustomRange)}
+              className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
+            >
+              <SlidersHorizontal className="size-3" /> Custom Range
             </Button>
             <Button size="sm" variant="ghost" onClick={handleResetDates} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
               Reset
@@ -730,29 +860,81 @@ function CollectionsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setSelectedDate(e.target.value);
-              }}
-              className="mt-1 h-8 sm:h-9 text-xs"
-            />
+        {/* Primary Cycle Navigation Control: Prev Arrow - Cycle Dropdown - Next Arrow */}
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handlePrevWeek}
+            disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
+            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+            title="Previous Week Cycle"
+          >
+            <ChevronLeft className="size-4" /> <span className="hidden sm:inline">Prev Week</span>
+          </Button>
+
+          <div className="flex-1 min-w-[200px]">
+            <Select
+              value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
+              onValueChange={(val) => handleSelectCycle(Number(val))}
+            >
+              <SelectTrigger className="h-9 font-semibold text-xs sm:text-sm text-primary border-primary/40 bg-primary/5">
+                <SelectValue placeholder="Select Collection Week Cycle..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {weeklyCycles.map((cycle) => (
+                  <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
+                    {cycle.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="mt-1 h-8 sm:h-9 text-xs"
-            />
-          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleNextWeek}
+            disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
+            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+            title="Next Week Cycle"
+          >
+            <span className="hidden sm:inline">Next Week</span> <ChevronRight className="size-4" />
+          </Button>
         </div>
+
+        {/* Collapsible Manual Date Range Inputs (Fallback) */}
+        {showCustomRange && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/40 bg-muted/20 p-2.5 rounded-lg">
+            <div>
+              <Label className="text-[11px] font-semibold text-muted-foreground">From Date (Custom)</Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setSelectedDate(e.target.value);
+                  setSelectedCycleIndex(null);
+                }}
+                className="mt-1 h-8 sm:h-9 text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] font-semibold text-muted-foreground">To Date (Custom)</Label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setSelectedCycleIndex(null);
+                }}
+                className="mt-1 h-8 sm:h-9 text-xs"
+              />
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* 3. Metrics Row (Total Expected, Total Collected & Unpaid/Skipped) */}

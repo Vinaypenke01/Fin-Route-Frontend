@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye, Image as ImageIcon } from "lucide-react";
+import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowUpRight, Filter, RefreshCw, FileText, CheckCircle2, Printer, Eye, Image as ImageIcon, ChevronLeft, ChevronRight, SlidersHorizontal, MapPin } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
 import { downloadFinancialReportImage } from "@/lib/download-report-image";
@@ -42,12 +42,6 @@ interface DailySummaryRow {
 }
 
 function ReportsPage() {
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [configuredDays, setConfiguredDays] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const getTodayStr = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -55,14 +49,47 @@ function ReportsPage() {
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
+  const today = getTodayStr();
 
-  // Filters (default to Today)
-  const [dateFrom, setDateFrom] = useState<string>(getTodayStr());
-  const [dateTo, setDateTo] = useState<string>(getTodayStr());
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [configuredDays, setConfiguredDays] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Line / Route State
+  const [lines, setLines] = useState<any[]>([]);
+  const [selectedLine, setSelectedLine] = useState<string>("all");
+
+  // Filters & Cycle Filtration State
+  const [dateFrom, setDateFrom] = useState<string>(today);
+  const [dateTo, setDateTo] = useState<string>(today);
   const [selectedDay, setSelectedDay] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("summary");
   const [viewingSummaryDate, setViewingSummaryDate] = useState<string | null>(null);
+  const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
+  const [selectedCycleIndex, setSelectedCycleIndex] = useState<number | null>(null);
+
+  const loadLines = async () => {
+    try {
+      const data = await guestWorkspaceService.getLines();
+      const loadedLines = data || [];
+      setLines(loadedLines);
+
+      const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      const lineForToday = loadedLines.find((ln: any) =>
+        ln.day_schedules?.some((s: any) => s.day_of_week.toLowerCase() === currentDayName)
+      );
+      if (lineForToday) {
+        setSelectedLine(lineForToday.public_id);
+      } else if (loadedLines.length > 0) {
+        setSelectedLine(loadedLines[0].public_id);
+      }
+    } catch (err) {
+      console.error("Failed to load lines:", err);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -71,6 +98,7 @@ function ReportsPage() {
         guestWorkspaceService.getCollections({
           date_from: dateFrom || undefined,
           date_to: dateTo || undefined,
+          line: selectedLine === "all" ? undefined : selectedLine,
           page_size: 1000,
         }),
         guestWorkspaceService.getExpenses({
@@ -96,8 +124,132 @@ function ReportsPage() {
   };
 
   useEffect(() => {
+    loadLines();
+  }, []);
+
+  useEffect(() => {
     loadData();
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, selectedLine]);
+
+  // ─── Earliest Anchor Date & Weekly Cycles Calculation ───────────────────────
+  const earliestAnchorDate = useMemo(() => {
+    let earliest = today;
+    customers.forEach((c) => {
+      if (c.start_date && c.start_date.slice(0, 10) < earliest) {
+        earliest = c.start_date.slice(0, 10);
+      }
+    });
+    collections.forEach((col) => {
+      const cd = col.collection_date ? String(col.collection_date).slice(0, 10) : "";
+      if (cd && cd < earliest) {
+        earliest = cd;
+      }
+    });
+    expenses.forEach((e) => {
+      const ed = e.expense_date ? String(e.expense_date).slice(0, 10) : "";
+      if (ed && ed < earliest) {
+        earliest = ed;
+      }
+    });
+    return earliest;
+  }, [customers, collections, expenses, today]);
+
+  const weeklyCycles = useMemo(() => {
+    if (!earliestAnchorDate) return [];
+    const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
+
+    let currStart = new Date(earliestAnchorDate);
+    if (isNaN(currStart.getTime())) return [];
+
+    const now = new Date();
+    let index = 1;
+
+    const formatFilterDate = (dStr: string) => {
+      if (!dStr) return "All";
+      if (dStr === today) return "Today";
+      try {
+        const [y, m, d] = dStr.split("-");
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+      } catch {
+        return dStr;
+      }
+    };
+
+    while (index <= 156) {
+      const currEnd = new Date(currStart);
+      currEnd.setDate(currEnd.getDate() + 6);
+
+      const fromStr = currStart.toISOString().slice(0, 10);
+      const toStr = currEnd.toISOString().slice(0, 10);
+      const isCurrent = today >= fromStr && today <= toStr;
+
+      cycles.push({
+        index,
+        label: `Week ${index}: ${formatFilterDate(fromStr)} – ${formatFilterDate(toStr)}${isCurrent ? " (Active)" : ""}`,
+        dateFrom: fromStr,
+        dateTo: toStr,
+        isCurrent,
+      });
+
+      if (currStart > now) break;
+
+      currStart = new Date(currEnd);
+      currStart.setDate(currStart.getDate() + 1);
+      index++;
+    }
+
+    return cycles;
+  }, [earliestAnchorDate, today]);
+
+  // Auto-select current active week cycle on initial load
+  useEffect(() => {
+    if (weeklyCycles.length > 0 && selectedCycleIndex === null) {
+      const currentCycle = weeklyCycles.find((c) => c.isCurrent);
+      if (currentCycle) {
+        setSelectedCycleIndex(currentCycle.index);
+        setDateFrom(currentCycle.dateFrom);
+        setDateTo(currentCycle.dateTo);
+      } else {
+        const lastCycle = weeklyCycles[weeklyCycles.length - 1];
+        setSelectedCycleIndex(lastCycle.index);
+        setDateFrom(lastCycle.dateFrom);
+        setDateTo(lastCycle.dateTo);
+      }
+    }
+  }, [weeklyCycles]);
+
+  const handleSelectCycle = (index: number) => {
+    const cycle = weeklyCycles.find((c) => c.index === index);
+    if (cycle) {
+      setSelectedCycleIndex(cycle.index);
+      setDateFrom(cycle.dateFrom);
+      setDateTo(cycle.dateTo);
+    }
+  };
+
+  const handlePrevWeek = () => {
+    const currentIdx = selectedCycleIndex || 1;
+    if (currentIdx > 1) {
+      handleSelectCycle(currentIdx - 1);
+    }
+  };
+
+  const handleNextWeek = () => {
+    const currentIdx = selectedCycleIndex || 1;
+    if (currentIdx < weeklyCycles.length) {
+      handleSelectCycle(currentIdx + 1);
+    }
+  };
+
+  const handlePresetCurrentWeek = () => {
+    const active = weeklyCycles.find((c) => c.isCurrent);
+    if (active) {
+      handleSelectCycle(active.index);
+    } else {
+      handlePresetThisWeek();
+    }
+  };
 
   const dynamicDaysList = useMemo(() => {
     if (!configuredDays || configuredDays.length === 0) {
@@ -116,21 +268,18 @@ function ReportsPage() {
     const t = getTodayStr();
     setDateFrom(t);
     setDateTo(t);
+    setSelectedCycleIndex(null);
   };
 
   const handlePresetThisWeek = () => {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sun
+    const dayOfWeek = now.getDay();
     const distanceToMon = (dayOfWeek + 6) % 7;
     const monday = new Date(now);
     monday.setDate(now.getDate() - distanceToMon);
-    
-    const year = monday.getFullYear();
-    const month = String(monday.getMonth() + 1).padStart(2, "0");
-    const day = String(monday.getDate()).padStart(2, "0");
-
-    setDateFrom(`${year}-${month}-${day}`);
-    setDateTo(getTodayStr());
+    setDateFrom(monday.toISOString().slice(0, 10));
+    setDateTo(today);
+    setSelectedCycleIndex(null);
   };
 
   const handlePresetThisMonth = () => {
@@ -138,13 +287,15 @@ function ReportsPage() {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     setDateFrom(`${year}-${month}-01`);
-    setDateTo(getTodayStr());
+    setDateTo(today);
+    setSelectedCycleIndex(null);
   };
 
   const handleClearFilters = () => {
-    setDateFrom("");
-    setDateTo("");
+    setDateFrom(today);
+    setDateTo(today);
     setSelectedDay("all");
+    setSelectedCycleIndex(null);
     setSearchQuery("");
   };
 
@@ -343,81 +494,143 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <Card className="p-3.5 sm:p-4 space-y-3 bg-card border-border/80 shadow-sm rounded-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b sm:border-0 pb-2.5 sm:pb-0">
+      {/* 1. Route Line Filter Selection */}
+      {lines.length > 0 && (
+        <Card className="p-3.5 space-y-2 bg-card border-border shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Filter className="size-3.5" /> Filters
+            <span className="text-xs font-bold uppercase tracking-wide text-foreground flex items-center gap-1.5">
+              <MapPin className="size-3.5 text-primary" /> Filter Reports by Route Line:
             </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="sm:hidden h-7 text-xs text-muted-foreground px-2"
-              onClick={handleClearFilters}
+            {selectedLine !== "all" && (
+              <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => setSelectedLine("all")}>
+                Show All Lines
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedLine("all")}
+              className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
+                selectedLine === "all"
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                  : "bg-background text-muted-foreground hover:text-foreground border-border"
+              }`}
             >
-              <RefreshCw className="size-3 mr-1" /> Reset
-            </Button>
+              All Route Lines
+            </button>
+            {lines.map((ln) => {
+              const isSelected = selectedLine === ln.public_id;
+              return (
+                <button
+                  key={ln.public_id}
+                  type="button"
+                  onClick={() => setSelectedLine(isSelected ? "all" : ln.public_id)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                      : "bg-background text-muted-foreground hover:text-foreground border-border"
+                  }`}
+                >
+                  <MapPin className={`size-3 ${isSelected ? "text-primary-foreground" : "text-primary"}`} />
+                  <span>{ln.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* 2. Smart Weekly Collection & Financial Cycle Navigation Bar */}
+      <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-4 text-primary" />
+            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Weekly Financial Report Cycles</h3>
+            <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
+              {dateFrom === dateTo ? (dateFrom === today ? "Today" : dateFrom) : `${dateFrom || "Start"} to ${dateTo || "End"}`}
+            </Badge>
           </div>
 
-          {/* Quick Presets Scrollable Pill Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               size="sm"
-              variant={dateFrom === getTodayStr() && dateTo === getTodayStr() ? "default" : "secondary"}
-              className="h-7 text-xs font-medium px-2.5 rounded-full whitespace-nowrap"
-              onClick={handlePresetToday}
+              variant={selectedCycleIndex !== null && weeklyCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
+              onClick={handlePresetCurrentWeek}
+              className="h-7 text-[11px] px-2.5 font-bold"
             >
+              Current Week (Active)
+            </Button>
+            <Button size="sm" variant={dateFrom === today && dateTo === today ? "default" : "outline"} onClick={handlePresetToday} className="h-7 text-[11px] px-2.5">
               Today
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 text-xs font-medium px-2.5 rounded-full whitespace-nowrap"
-              onClick={handlePresetThisWeek}
-            >
-              This Week
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 text-xs font-medium px-2.5 rounded-full whitespace-nowrap"
-              onClick={handlePresetThisMonth}
-            >
+
+            <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5">
               This Month
             </Button>
             <Button
               size="sm"
-              variant="outline"
-              className="hidden sm:inline-flex h-7 text-xs text-muted-foreground px-2.5 rounded-full"
-              onClick={handleClearFilters}
+              variant={showCustomRange ? "secondary" : "outline"}
+              onClick={() => setShowCustomRange(!showCustomRange)}
+              className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
             >
+              <SlidersHorizontal className="size-3" /> Custom Range
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleClearFilters} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
               <RefreshCw className="size-3 mr-1" /> Reset
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1 sm:pt-0">
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
-            <Input
-              type="date"
-              className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
+        {/* Primary Cycle Navigation Control: Prev Arrow - Cycle Dropdown - Next Arrow */}
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handlePrevWeek}
+            disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
+            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+            title="Previous Week Cycle"
+          >
+            <ChevronLeft className="size-4" /> <span className="hidden sm:inline">Prev Week</span>
+          </Button>
+
+          <div className="flex-1 min-w-[200px]">
+            <Select
+              value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
+              onValueChange={(val) => handleSelectCycle(Number(val))}
+            >
+              <SelectTrigger className="h-9 font-semibold text-xs sm:text-sm text-primary border-primary/40 bg-primary/5">
+                <SelectValue placeholder="Select Report Week Cycle..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {weeklyCycles.map((cycle) => (
+                  <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
+                    {cycle.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleNextWeek}
+            disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
+            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+            title="Next Week Cycle"
+          >
+            <span className="hidden sm:inline">Next Week</span> <ChevronRight className="size-4" />
+          </Button>
+        </div>
+
+        {/* Route Day Filter & Search & Custom Date Range */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
           <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
-            <Input
-              type="date"
-              className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
-          <div className="col-span-2 sm:col-span-1">
-            <Label className="text-[11px] font-semibold text-muted-foreground">Route Day</Label>
+            <Label className="text-[11px] font-semibold text-muted-foreground">Route Day Filter</Label>
             <Select value={selectedDay} onValueChange={setSelectedDay}>
               <SelectTrigger className="mt-1 h-8 sm:h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -427,7 +640,7 @@ function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2 sm:col-span-1">
+          <div>
             <Label className="text-[11px] font-semibold text-muted-foreground">Search Records</Label>
             <div className="relative mt-1">
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
@@ -440,6 +653,34 @@ function ReportsPage() {
               />
             </div>
           </div>
+          {showCustomRange && (
+            <div className="grid grid-cols-2 gap-2 col-span-1 sm:col-span-2 lg:col-span-1">
+              <div>
+                <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
+                <Input
+                  type="date"
+                  className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setSelectedCycleIndex(null);
+                  }}
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
+                <Input
+                  type="date"
+                  className="mt-1 h-8 sm:h-9 text-xs font-mono px-2"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setSelectedCycleIndex(null);
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
