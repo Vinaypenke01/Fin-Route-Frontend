@@ -65,10 +65,11 @@ function ReportsPage() {
   const [dateFrom, setDateFrom] = useState<string>(today);
   const [dateTo, setDateTo] = useState<string>(today);
   const [selectedDays, setSelectedDays] = useState<string[]>(["all"]);
-  const [isAllTimeSelected, setIsAllTimeSelected] = useState<boolean>(false);
+  const [isAllTimeSelected, setIsAllTimeSelected] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<string>("summary");
   const [viewingSummaryDate, setViewingSummaryDate] = useState<string | null>(null);
+  const [viewingCycle, setViewingCycle] = useState<{ cycleIndex: number; dateFrom: string; dateTo: string; label: string } | null>(null);
   const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number | null>(null);
 
@@ -100,14 +101,10 @@ function ReportsPage() {
     try {
       const [colRes, expRes, custRes, ws, reconRes, capRes] = await Promise.all([
         guestWorkspaceService.getCollections({
-          date_from: isAllTimeSelected ? undefined : (dateFrom || undefined),
-          date_to: isAllTimeSelected ? undefined : (dateTo || undefined),
           line: selectedLine === "all" ? undefined : selectedLine,
           page_size: 1000,
         }),
         guestWorkspaceService.getExpenses({
-          date_from: isAllTimeSelected ? undefined : (dateFrom || undefined),
-          date_to: isAllTimeSelected ? undefined : (dateTo || undefined),
           page_size: 1000,
         }),
         guestWorkspaceService.getCustomers({ status: "active", page_size: 1000 }),
@@ -218,19 +215,39 @@ function ReportsPage() {
       }
     };
 
+    const targetDays = activeTargetDaysOfWeek.length > 0 ? activeTargetDaysOfWeek : [1, 2, 3, 4, 5, 6, 0];
+
     while (weekIndex <= 156) {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
 
       const weekFromStr = weekStart.toISOString().slice(0, 10);
       const weekToStr = weekEnd.toISOString().slice(0, 10);
+
+      // Compute configured dates for this week based on targetDays
+      const configuredDates: string[] = [];
+      targetDays.forEach((dNum) => {
+        const cycleDate = new Date(weekStart);
+        const offsetFromMon = (dNum + 6) % 7;
+        cycleDate.setDate(cycleDate.getDate() + offsetFromMon);
+        configuredDates.push(cycleDate.toISOString().slice(0, 10));
+      });
+
+      configuredDates.sort();
+
+      const cycleFrom = configuredDates[0] || weekFromStr;
+      const cycleTo = configuredDates[configuredDates.length - 1] || weekToStr;
       const isCurrent = today >= weekFromStr && today <= weekToStr;
+
+      const dateRangeLabel = cycleFrom === cycleTo
+        ? formatShortDate(cycleFrom)
+        : `${formatShortDate(cycleFrom)} - ${formatShortDate(cycleTo)}`;
 
       cycles.push({
         index: weekIndex,
-        label: `Week ${weekIndex} (${formatShortDate(weekFromStr)} - ${formatShortDate(weekToStr)})${isCurrent ? " ★ Current Week" : ""}`,
-        dateFrom: weekFromStr,
-        dateTo: weekToStr,
+        label: `Week ${weekIndex} (${dateRangeLabel})${isCurrent ? " ★ Current Week" : ""}`,
+        dateFrom: cycleFrom,
+        dateTo: cycleTo,
         isCurrent,
       });
 
@@ -240,9 +257,29 @@ function ReportsPage() {
     }
 
     return cycles;
-  }, [earliestAnchorDate, today]);
+  }, [earliestAnchorDate, activeTargetDaysOfWeek, today]);
 
   const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
+
+  // Auto-select active week cycle: restore from sessionStorage if available, else current active week
+  useEffect(() => {
+    if (fullWeekCycles.length > 0 && !hasUserManuallySelectedCycle) {
+      const savedCycleIdxStr = sessionStorage.getItem("finroute_active_week_cycle_index");
+      let cycleToSelect = null;
+
+      if (savedCycleIdxStr) {
+        const savedIdx = parseInt(savedCycleIdxStr, 10);
+        cycleToSelect = fullWeekCycles.find((c) => c.index === savedIdx);
+      }
+
+      if (cycleToSelect) {
+        setSelectedCycleIndex(cycleToSelect.index);
+        setDateFrom(cycleToSelect.dateFrom);
+        setDateTo(cycleToSelect.dateTo);
+        setIsAllTimeSelected(false);
+      }
+    }
+  }, [fullWeekCycles, hasUserManuallySelectedCycle]);
 
   const handleSelectCycle = (index: number) => {
     const cycle = fullWeekCycles.find((c) => c.index === index);
@@ -252,6 +289,7 @@ function ReportsPage() {
       setDateTo(cycle.dateTo);
       setHasUserManuallySelectedCycle(true);
       setIsAllTimeSelected(false);
+      sessionStorage.setItem("finroute_active_week_cycle_index", String(cycle.index));
     }
   };
 
@@ -481,71 +519,79 @@ function ReportsPage() {
   const netCollections = grossCollections - totalExpenses;
   const netMarginPct = grossCollections > 0 ? ((netCollections / grossCollections) * 100).toFixed(1) : "0.0";
 
-  // Grouped Daily Summary (Date/Day wise breakdown deducting expenses)
-  const dailySummaries = useMemo(() => {
-    const map = new Map<string, DailySummaryRow>();
+  // Grouped Weekly Summary (Financial Week Cycle wise breakdown deducting expenses)
+  const weeklySummaries = useMemo(() => {
+    const list: {
+      cycleIndex: number;
+      dateFrom: string;
+      dateTo: string;
+      label: string;
+      dateKey: string;
+      displayDate: string;
+      dayName: string;
+      isCurrent: boolean;
+      isFuture: boolean;
+      grossCollected: number;
+      totalExpenses: number;
+      netCollection: number;
+      collectionCount: number;
+      expenseCount: number;
+    }[] = [];
 
-    // 1. Accumulate collections by date
-    filteredCollections.forEach((c) => {
-      const dateKey = c.collection_date ? String(c.collection_date).slice(0, 10) : "Unknown";
-      const d = new Date(dateKey);
-      const dayName = !isNaN(d.getTime()) ? d.toLocaleDateString("en-US", { weekday: "long" }) : "";
-      
-      const existing = map.get(dateKey) || {
-        dateKey,
-        displayDate: dateKey,
-        dayName,
-        grossCollected: 0,
-        totalExpenses: 0,
-        netCollection: 0,
-        collectionCount: 0,
-        expenseCount: 0,
-      };
+    fullWeekCycles.forEach((cycle) => {
+      const isFuture = cycle.dateFrom > today;
 
-      existing.grossCollected += Number(c.collected_amount || 0);
-      existing.collectionCount += 1;
-      existing.netCollection = existing.grossCollected - existing.totalExpenses;
-      map.set(dateKey, existing);
+      const cycleCollections = filteredCollections.filter((c) => {
+        const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
+        const isOpeningBalance = c.remarks?.toLowerCase().includes("initial opening");
+        return entryDate >= cycle.dateFrom && entryDate <= cycle.dateTo && !isOpeningBalance;
+      });
+
+      const cycleExpenses = filteredExpenses.filter((e) => {
+        const entryDate = e.expense_date ? String(e.expense_date).slice(0, 10) : (e.created_at ? String(e.created_at).slice(0, 10) : "");
+        return entryDate >= cycle.dateFrom && entryDate <= cycle.dateTo;
+      });
+
+      const grossCollected = cycleCollections.reduce((sum, c) => sum + Number(c.collected_amount || 0), 0);
+      const totalExpenses = cycleExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const netCollection = grossCollected - totalExpenses;
+
+      // Show cycle if it has activity or is current/past cycle up to target
+      if (grossCollected > 0 || totalExpenses > 0 || cycle.isCurrent || cycle.dateTo <= today) {
+        list.push({
+          cycleIndex: cycle.index,
+          dateFrom: cycle.dateFrom,
+          dateTo: cycle.dateTo,
+          label: `Week ${cycle.index} (${cycle.dateFrom} - ${cycle.dateTo})`,
+          dateKey: `Week ${cycle.index}`,
+          displayDate: `${cycle.dateFrom} to ${cycle.dateTo}`,
+          dayName: `Week ${cycle.index}`,
+          isCurrent: cycle.isCurrent,
+          isFuture,
+          grossCollected,
+          totalExpenses,
+          netCollection,
+          collectionCount: cycleCollections.length,
+          expenseCount: cycleExpenses.length,
+        });
+      }
     });
 
-    // 2. Accumulate expenses by date
-    filteredExpenses.forEach((e) => {
-      const dateKey = e.expense_date ? String(e.expense_date).slice(0, 10) : "Unknown";
-      const d = new Date(dateKey);
-      const dayName = !isNaN(d.getTime()) ? d.toLocaleDateString("en-US", { weekday: "long" }) : "";
-
-      const existing = map.get(dateKey) || {
-        dateKey,
-        displayDate: dateKey,
-        dayName,
-        grossCollected: 0,
-        totalExpenses: 0,
-        netCollection: 0,
-        collectionCount: 0,
-        expenseCount: 0,
-      };
-
-      existing.totalExpenses += Number(e.amount || 0);
-      existing.expenseCount += 1;
-      existing.netCollection = existing.grossCollected - existing.totalExpenses;
-      map.set(dateKey, existing);
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
-  }, [filteredCollections, filteredExpenses]);
+    return list.sort((a, b) => b.cycleIndex - a.cycleIndex);
+  }, [fullWeekCycles, filteredCollections, filteredExpenses, today]);
 
   // Export CSV Handler
   const handleExportCsv = (type: "summary" | "collection" | "expense") => {
     if (type === "summary") {
-      let csv = "Date,Day,Gross Collections (INR),Expenses Deducted (INR),Net Collection (INR),Collection Receipts,Expense Entries\n";
-      dailySummaries.forEach((row) => {
-        csv += `"${row.dateKey}","${row.dayName}",${row.grossCollected},${row.totalExpenses},${row.netCollection},${row.collectionCount},${row.expenseCount}\n`;
+      let csv = "Week Cycle,From Date,To Date,Gross Collections (INR),Expenses Deducted (INR),Net Collection (INR),Collection Receipts,Expense Entries\n";
+      weeklySummaries.forEach((row) => {
+        csv += `"Week ${row.cycleIndex}","${row.dateFrom}","${row.dateTo}",${row.grossCollected},${row.totalExpenses},${row.netCollection},${row.collectionCount},${row.expenseCount}\n`;
       });
       const blob = new Blob([csv], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `finroute_daily_net_summary_${getTodayStr()}.csv`;
+      a.download = `finroute_weekly_net_summary_${getTodayStr()}.csv`;
       a.click();
     } else {
       const url = guestWorkspaceService.getReportExportUrl(type, "csv");
@@ -554,7 +600,7 @@ function ReportsPage() {
   };
 
   const handleExportReportImage = () => {
-    downloadFinancialReportImage(dailySummaries, {
+    downloadFinancialReportImage(weeklySummaries, {
       dateFrom: isAllTimeSelected ? "All Time" : dateFrom,
       dateTo: isAllTimeSelected ? "All Time" : dateTo,
       dayFilter: selectedDays.join(", "),
@@ -954,8 +1000,8 @@ function ReportsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex w-full sm:w-auto overflow-x-auto p-1 bg-muted/60 justify-start gap-1 rounded-xl">
           <TabsTrigger value="summary" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
-            <span className="hidden sm:inline">Daily Net Summary (Deducting Expenses)</span>
-            <span className="sm:hidden">Daily Net Summary</span>
+            <span className="hidden sm:inline">Weekly Net Summary (Deducting Expenses)</span>
+            <span className="sm:hidden">Weekly Net Summary</span>
           </TabsTrigger>
           <TabsTrigger value="collections" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
             <span className="hidden sm:inline">Collection Receipts ({filteredCollections.length})</span>
@@ -971,16 +1017,16 @@ function ReportsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Daily & Route Day Breakdown Table */}
+        {/* Tab 1: Weekly Collection Cycle Breakdown Table */}
         <TabsContent value="summary">
           <Card className="p-4 space-y-3 border-border/80">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
               <div>
                 <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                  <Calendar className="size-4 text-primary" /> Daily Collections & Expense Deduction Breakdown
+                  <Calendar className="size-4 text-primary" /> Weekly Collections & Expense Deduction Breakdown
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Individual date-wise summary showing gross collected amounts minus operational expenses.
+                  Financial week cycle breakdown showing gross collected amounts minus operational expenses for each week.
                 </p>
               </div>
               <Button size="sm" variant="outline" onClick={() => handleExportCsv("summary")} className="h-8 text-xs">
@@ -990,30 +1036,38 @@ function ReportsPage() {
 
             {loading ? (
               <p className="text-xs text-muted-foreground text-center py-8">Loading summary report...</p>
-            ) : dailySummaries.length === 0 ? (
+            ) : weeklySummaries.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">No collections or expenses found matching selected filters.</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40 text-xs">
-                      <TableHead className="py-2.5 font-bold">Date & Route Day</TableHead>
+                      <TableHead className="py-2.5 font-bold">Week Cycle & Date Range</TableHead>
                       <TableHead className="py-2.5 font-bold text-right">Gross Collections</TableHead>
                       <TableHead className="py-2.5 font-bold text-right">Expenses Deducted</TableHead>
                       <TableHead className="py-2.5 font-bold text-right">Net Cash Collected</TableHead>
-                      <TableHead className="py-2.5 font-bold text-center">Receipts Count</TableHead>
+                      <TableHead className="py-2.5 font-bold text-center">Receipts & Vouchers</TableHead>
                       <TableHead className="py-2.5 font-bold text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dailySummaries.map((row) => (
-                      <TableRow key={row.dateKey} className="text-xs hover:bg-muted/30">
+                    {weeklySummaries.map((row) => (
+                      <TableRow key={row.cycleIndex} className="text-xs hover:bg-muted/30">
                         <TableCell className="py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-foreground text-xs">{row.dateKey}</span>
-                            {row.dayName && (
-                              <Badge variant="outline" className="text-[10px] capitalize font-medium bg-primary/5 text-primary border-primary/20">
-                                {row.dayName}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-bold text-foreground text-xs">{row.label}</span>
+                            {row.isCurrent ? (
+                              <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/30">
+                                ★ Current Week
+                              </Badge>
+                            ) : row.isFuture ? (
+                              <Badge variant="outline" className="text-[10px] font-normal bg-muted text-muted-foreground border-border">
+                                Upcoming
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                                ✅ Completed Cycle
                               </Badge>
                             )}
                           </div>
@@ -1021,14 +1075,14 @@ function ReportsPage() {
                         <TableCell className="py-3 text-right font-mono font-bold text-emerald-700">
                           {inr(row.grossCollected)}
                         </TableCell>
-                        <TableCell className="py-3 text-right font-mono font-semibold text-red-600">
+                        <TableCell className="py-3 text-right font-mono font-semibold text-rose-600">
                           {row.totalExpenses > 0 ? `- ${inr(row.totalExpenses)}` : "₹0"}
                         </TableCell>
-                        <TableCell className={`py-3 text-right font-mono font-bold text-sm ${row.netCollection >= 0 ? "text-primary" : "text-red-700"}`}>
+                        <TableCell className={`py-3 text-right font-mono font-bold text-sm ${row.netCollection >= 0 ? "text-primary" : "text-rose-700"}`}>
                           {inr(row.netCollection)}
                         </TableCell>
                         <TableCell className="py-3 text-center font-mono">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium text-foreground">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted text-[11px] font-medium text-foreground">
                             {row.collectionCount} Collections • {row.expenseCount} Expenses
                           </span>
                         </TableCell>
@@ -1037,9 +1091,11 @@ function ReportsPage() {
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs px-2.5 bg-primary/5 hover:bg-primary/15 text-primary border-primary/20 font-semibold"
-                            onClick={() => setViewingSummaryDate(row.dateKey)}
+                            onClick={() => {
+                              setViewingCycle(row);
+                            }}
                           >
-                            <Eye className="size-3.5 mr-1" /> View
+                            <Eye className="size-3.5 mr-1" /> View Week Breakdown
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1250,7 +1306,198 @@ function ReportsPage() {
         expenses={expenses}
         customers={customers}
       />
+
+      {/* Weekly Breakdown Detail Modal */}
+      <WeeklyBreakdownModal
+        cycle={viewingCycle}
+        open={!!viewingCycle}
+        setOpen={(v) => { if (!v) setViewingCycle(null); }}
+        collections={collections}
+        expenses={expenses}
+        customers={customers}
+      />
     </div>
+  );
+}
+
+function WeeklyBreakdownModal({
+  cycle,
+  open,
+  setOpen,
+  collections,
+  expenses,
+  customers,
+}: {
+  cycle: { cycleIndex: number; dateFrom: string; dateTo: string; label: string } | null;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  collections: Collection[];
+  expenses: Expense[];
+  customers: Customer[];
+}) {
+  if (!cycle) return null;
+
+  const cycleCollections = collections.filter((c) => {
+    const isOpening = c.remarks?.toLowerCase().includes("initial opening");
+    if (isOpening) return false;
+    const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
+    return entryDate >= cycle.dateFrom && entryDate <= cycle.dateTo;
+  });
+
+  const cycleExpenses = expenses.filter((e) => {
+    const expDate = e.expense_date ? String(e.expense_date).slice(0, 10) : (e.created_at ? String(e.created_at).slice(0, 10) : "");
+    return expDate >= cycle.dateFrom && expDate <= cycle.dateTo;
+  });
+
+  const customerMap = new Map<string, Customer>();
+  customers.forEach((c) => {
+    if (c.public_id) customerMap.set(String(c.public_id).toLowerCase(), c);
+    if (c.customer_code) customerMap.set(String(c.customer_code).toLowerCase(), c);
+  });
+
+  const grossTotal = cycleCollections.reduce((s, c) => s + Number(c.collected_amount || 0), 0);
+  const expenseTotal = cycleExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const netInHand = grossTotal - expenseTotal;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="size-5 text-primary" /> Week {cycle.cycleIndex} Breakdown — <span className="font-mono text-primary font-bold">{cycle.dateFrom} - {cycle.dateTo}</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Detailed list of borrowers who paid, sequence numbers, and net cash calculation after deducting operational expenses for this week.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {/* Section 1: Customer Collections List */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-foreground">Customer Payments ({cycleCollections.length})</h4>
+              <span className="font-mono text-xs font-bold text-emerald-700">Gross: {inr(grossTotal)}</span>
+            </div>
+
+            {cycleCollections.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-3 text-center bg-muted/20 rounded-lg">No collection receipts recorded in this week cycle.</p>
+            ) : (
+              <div className="border border-border rounded-lg max-h-52 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 text-[11px]">
+                      <TableHead className="py-2">Seq # & Borrower</TableHead>
+                      <TableHead className="py-2">Status</TableHead>
+                      <TableHead className="py-2">Payment Mode</TableHead>
+                      <TableHead className="py-2 text-right">Collected (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cycleCollections.map((c) => {
+                      const cust = customerMap.get(String(c.customer_public_id).toLowerCase()) ||
+                                   customerMap.get(String(c.customer_code).toLowerCase());
+                      const seqNo = cust?.sequence_number;
+                      const isSkipped = c.status_code === "skipped" || c.status_name?.toLowerCase().includes("skipped");
+
+                      return (
+                        <TableRow key={c.public_id} className="text-xs">
+                          <TableCell className="py-2">
+                            <div className="flex items-center gap-1.5">
+                              {seqNo && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
+                                  #{seqNo}
+                                </span>
+                              )}
+                              <div>
+                                <p className="font-bold text-foreground">{c.customer_name}</p>
+                                <p className="font-mono text-[10px] text-muted-foreground">{c.customer_code}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2">
+                            {isSkipped ? (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-400/30 text-[10px] py-0 font-bold">
+                                Skipped
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-400/30 text-[10px] py-0 font-bold">
+                                Paid
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-[11px]">
+                            {isSkipped ? "N/A" : (c.payment_mode_name || "Cash")}
+                          </TableCell>
+                          <TableCell className={`py-2 text-right font-mono font-bold ${isSkipped ? "text-amber-600" : "text-emerald-700"}`}>
+                            {isSkipped ? "Skipped (₹0)" : inr(c.collected_amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Operational Expenses List */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-foreground">Operational Expenses ({cycleExpenses.length})</h4>
+              <span className="font-mono text-xs font-bold text-rose-600">Deducted: - {inr(expenseTotal)}</span>
+            </div>
+
+            {cycleExpenses.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-3 text-center bg-muted/20 rounded-lg">No operational expenses recorded in this week cycle.</p>
+            ) : (
+              <div className="border border-border rounded-lg max-h-40 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 text-[11px]">
+                      <TableHead className="py-2">Category & Description</TableHead>
+                      <TableHead className="py-2">Payment Mode</TableHead>
+                      <TableHead className="py-2 text-right">Amount (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cycleExpenses.map((e) => (
+                      <TableRow key={e.public_id} className="text-xs">
+                        <TableCell className="py-2">
+                          <p className="font-semibold text-foreground">{e.category_name || "General"}</p>
+                          <p className="text-[10px] text-muted-foreground">{e.description || "N/A"}</p>
+                        </TableCell>
+                        <TableCell className="py-2 text-[11px]">{e.payment_mode_name || "Cash"}</TableCell>
+                        <TableCell className="py-2 text-right font-mono font-bold text-rose-600">
+                          - {inr(e.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Bottom Net Calculation Box */}
+          <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-2">
+            <div className="flex items-center justify-between text-xs font-medium">
+              <span className="text-muted-foreground">Gross Collections Total</span>
+              <span className="font-mono font-semibold text-emerald-800">{inr(grossTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-medium">
+              <span className="text-muted-foreground">Operational Expenses Total</span>
+              <span className="font-mono font-semibold text-rose-700">- {inr(expenseTotal)}</span>
+            </div>
+            <div className="border-t border-emerald-500/20 pt-2 flex items-center justify-between">
+              <span className="text-xs font-extrabold text-foreground">Week {cycle.cycleIndex} Net Cash Collected</span>
+              <span className={`font-mono text-base font-extrabold ${netInHand >= 0 ? "text-emerald-800 dark:text-emerald-300" : "text-rose-700"}`}>
+                {inr(netInHand)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

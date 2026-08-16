@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,16 +11,22 @@ import { toast } from "sonner";
 
 interface DailyCashReconciliationCardProps {
   date?: string;
+  dateFrom?: string;
+  dateTo?: string;
   line?: string;
   lineName?: string;
+  refreshTrigger?: number;
   onRefresh?: () => void;
   className?: string;
 }
 
 export function DailyCashReconciliationCard({
   date,
+  dateFrom,
+  dateTo,
   line,
   lineName,
+  refreshTrigger,
   onRefresh,
   className = "",
 }: DailyCashReconciliationCardProps) {
@@ -41,16 +47,20 @@ export function DailyCashReconciliationCard({
 
   const [routeState, setRouteState] = useState<"idle" | "started" | "stopped">("idle");
 
+  const lastFetchTimeRef = useRef<number>(0);
+
   const loadReconciliation = async () => {
     setLoading(true);
+    lastFetchTimeRef.current = Date.now();
     try {
-      const data = await guestWorkspaceService.getCashReconciliation(date, line);
+      const data = await guestWorkspaceService.getCashReconciliation(date, line, dateFrom, dateTo);
       setRecon(data);
 
       const savedStatus = localStorage.getItem(storageKey) as "idle" | "started" | "stopped" | null;
       if (savedStatus) {
         setRouteState(savedStatus);
-      } else if ((data?.capital_total || 0) > 0 || (data?.opening_carried_forward || 0) > 0 || (data?.collections_total || 0) > 0) {
+      } else if ((data?.today_capital_total || 0) > 0 || (data?.collections_count || 0) > 0 || (data?.disbursements_count || 0) > 0) {
+        // Auto-start route only if new capital, collections or disbursements were explicitly recorded TODAY
         setRouteState("started");
       } else {
         setRouteState("idle");
@@ -64,31 +74,32 @@ export function DailyCashReconciliationCard({
 
   useEffect(() => {
     loadReconciliation();
-  }, [date, line]);
+
+    const handleReconRefreshEvent = () => loadReconciliation();
+    const handleWindowFocus = () => {
+      // Throttle window focus refetching to once every 3 seconds
+      if (Date.now() - lastFetchTimeRef.current > 3000) {
+        loadReconciliation();
+      }
+    };
+
+    window.addEventListener("finroute:recon_refresh", handleReconRefreshEvent);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      window.removeEventListener("finroute:recon_refresh", handleReconRefreshEvent);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [date, dateFrom, dateTo, line, refreshTrigger]);
 
   const handleStartRouteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const amountNum = parseFloat(capitalAmountStr) || 0;
-    if (amountNum < 0) {
-      setError("Capital amount cannot be negative.");
-      return;
-    }
     setSubmitting(true);
     try {
-      if (amountNum > 0) {
-        await guestWorkspaceService.recordCapital({
-          entry_date: targetDate,
-          amount: amountNum,
-          remarks: remarks.trim() || "Starting route cash / opening capital",
-          line: line && line !== "all" ? line : undefined,
-        });
-      }
       localStorage.setItem(storageKey, "started");
       setRouteState("started");
       setIsStartModalOpen(false);
-      setCapitalAmountStr("5000");
-      setRemarks("");
       loadReconciliation();
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -387,7 +398,7 @@ export function DailyCashReconciliationCard({
               <Play className="size-5 fill-current" /> Start Daily Collection Route
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Enter starting cash in hand for route <b>{lineName || "Selected Line"}</b> on <b>{targetDate}</b>.
+              Begin today's collection route for <b>{lineName || "Selected Line"}</b> on <b>{targetDate}</b>.
             </DialogDescription>
           </DialogHeader>
 
@@ -398,33 +409,29 @@ export function DailyCashReconciliationCard({
               </div>
             )}
 
-            <div>
-              <label className="text-xs font-semibold">Starting / Opening Cash Amount (₹)</label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="mt-1 font-mono font-bold text-base"
-                value={capitalAmountStr}
-                onChange={(e) => setCapitalAmountStr(e.target.value.replace(/\D/g, ""))}
-                placeholder="5000"
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">Leave 0 if starting with ₹0 opening cash.</p>
+            <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground font-medium">Carried-Forward Float:</span>
+                <span className="font-mono font-bold text-blue-700 dark:text-blue-300">+{inr(recon?.opening_carried_forward || recon?.capital_total || 0)}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                <span className="text-muted-foreground font-medium">Today's Collections:</span>
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">+{inr(collections)}</span>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold">Description / Note</label>
-              <Input
-                className="mt-1 text-xs"
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="e.g. Starting float cash from office safe"
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              To inject additional new cash float into your wallet today, use the <b>+ Starting Cash</b> button on the route card.
+            </p>
 
-            <Button type="submit" className="w-full font-bold bg-emerald-600 hover:bg-emerald-700 text-white" disabled={submitting}>
-              {submitting ? "Starting Route..." : "Start Route Now"}
-            </Button>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setIsStartModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white" disabled={submitting}>
+                {submitting ? "Starting..." : "🟢 Confirm Start Route"}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

@@ -290,6 +290,14 @@ export const guestWorkspaceService = {
     await apiRequest(`/app/customers/${id}/`, { method: "DELETE" });
   },
 
+  async getCustomerCollections(customerPublicId: string): Promise<Collection[]> {
+    const res = await apiRequest<any>(`/app/customers/${customerPublicId}/collections/`);
+    if (Array.isArray(res.data)) return res.data;
+    if (res.data && Array.isArray(res.data.results)) return res.data.results;
+    if (Array.isArray((res as any).results)) return (res as any).results;
+    return [];
+  },
+
   // ─── Collections ───────────────────────────────────────────────────────────
   async getCollections(params?: { date_from?: string; date_to?: string; customer?: string; status?: string; line?: string; portion?: string; page?: number; page_size?: number }) {
     const cleanedParams: Record<string, string> = {};
@@ -308,8 +316,8 @@ export const guestWorkspaceService = {
       items = res.data;
     } else if (res.data && Array.isArray((res.data as any).results)) {
       items = (res.data as any).results;
-    } else if (res && Array.isArray((res as any).results)) {
-      items = (res.data as any).results;
+    } else if (Array.isArray((res as any).results)) {
+      items = (res as any).results;
     }
 
     return { ...res, data: items };
@@ -479,9 +487,11 @@ export const guestWorkspaceService = {
     });
   },
 
-  async getCashReconciliation(date?: string, line?: string): Promise<CashReconciliation> {
+  async getCashReconciliation(date?: string, line?: string, date_from?: string, date_to?: string): Promise<CashReconciliation> {
     const params: Record<string, string> = {};
-    if (date) params.date = date;
+    if (date_from) params.date_from = date_from;
+    if (date_to) params.date_to = date_to;
+    if (date && !date_from) params.date = date;
     if (line && line !== "all") params.line = line;
     const query = new URLSearchParams(params).toString();
     const res = await apiRequest<CashReconciliation>(`/app/cash-reconciliation/${query ? `?${query}` : ""}`);

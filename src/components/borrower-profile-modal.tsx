@@ -44,16 +44,32 @@ function InstallmentPassbookGrid({
   const safePaid = Math.min(paid || 0, safeTotal);
   const remaining = Math.max(0, safeTotal - safePaid);
   const hasSkipped = skipped > 0;
+  const isCompletedWithBalance = (safePaid + skipped) >= safeTotal && remaining === 0;
+  const isFullyPaidOff = safePaid > 0 && remaining === 0 && !hasSkipped;
 
   return (
     <div className="space-y-1.5 pt-1">
       <div className="flex items-center justify-between text-[11px] font-semibold">
         <span>Installments Progress</span>
         <span className="font-mono text-foreground font-bold flex items-center gap-1">
-          <span className={hasSkipped ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30" : "text-emerald-700 dark:text-emerald-400"}>
-            {safePaid} / {safeTotal} Paid {hasSkipped ? `(${skipped} Skipped)` : ""}
+          <span
+            className={
+              isFullyPaidOff
+                ? "text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30"
+                : isCompletedWithBalance
+                  ? "text-amber-800 dark:text-amber-300 font-extrabold bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/40"
+                  : hasSkipped
+                    ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30"
+                    : "text-emerald-700 dark:text-emerald-400"
+            }
+          >
+            {isFullyPaidOff ? `🎉 Fully Settled (${safePaid} Paid)` : `${safePaid} / ${safeTotal} Paid`} {hasSkipped ? `(${skipped} Skipped)` : ""}
           </span>
-          <span className="text-muted-foreground text-[10px]">({remaining} left)</span>
+          {isCompletedWithBalance ? (
+            <span className="text-amber-700 font-extrabold text-[10px] bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">⚠️ Tenure Ended</span>
+          ) : !isFullyPaidOff ? (
+            <span className="text-muted-foreground text-[10px]">({remaining} left)</span>
+          ) : null}
         </span>
       </div>
       <div className="grid grid-cols-10 gap-1 p-2 bg-muted/30 border border-border/60 rounded-lg max-h-24 overflow-y-auto">
@@ -71,18 +87,31 @@ function InstallmentPassbookGrid({
             isSkipped = !isStruck && num <= safePaid + safeSkipped;
           }
 
+          const isUnneededAfterFullSettlement = isFullyPaidOff && !isStruck && !isSkipped;
+
           return (
             <div
               key={i}
-              className={`h-5 text-[9px] font-extrabold font-mono rounded flex items-center justify-center transition-all ${isStruck
+              className={`h-5 text-[9px] font-extrabold font-mono rounded flex items-center justify-center transition-all ${
+                isStruck
                   ? "bg-emerald-600 text-white opacity-90 shadow-xs"
                   : isSkipped
                     ? "bg-rose-600 text-white shadow-xs"
-                    : "bg-background text-muted-foreground border border-border/80"
-                }`}
-              title={`Installment #${num}: ${isStruck ? "Paid & Struck" : isSkipped ? "Skipped (Struck Red)" : "Pending"}`}
+                    : isUnneededAfterFullSettlement
+                      ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 opacity-70 line-through"
+                      : "bg-background text-muted-foreground border border-border/80"
+              }`}
+              title={`Installment #${num}: ${
+                isUnneededAfterFullSettlement
+                  ? "Settled (Loan Paid in Full Early)"
+                  : isStruck
+                    ? "Paid & Struck"
+                    : isSkipped
+                      ? "Skipped (Struck Red)"
+                      : "Pending"
+              }`}
             >
-              {isStruck || isSkipped ? <s>{num}</s> : num}
+              {isStruck || isSkipped || isUnneededAfterFullSettlement ? <s>{num}</s> : num}
             </div>
           );
         })}
@@ -113,24 +142,26 @@ export function BorrowerProfileDetailsModal({
     if (!customer) return;
     setLoading(true);
     try {
-      const [freshCust, collectionsRes] = await Promise.all([
+      const [freshCust, customerCols, generalCols] = await Promise.all([
         guestWorkspaceService.getCustomerDetail(customer.public_id).catch(() => null),
+        guestWorkspaceService.getCustomerCollections(customer.public_id).catch(() => []),
         guestWorkspaceService.getCollections({ customer: customer.public_id, page_size: 1000 }).catch(() => ({ data: [] })),
       ]);
       if (freshCust) setDetail(freshCust);
 
-      let items: Collection[] = Array.isArray(collectionsRes.data)
-        ? collectionsRes.data
-        : (collectionsRes as any)?.results || (collectionsRes as any)?.data?.results || [];
+      let items: Collection[] = customerCols.length > 0
+        ? customerCols
+        : (Array.isArray(generalCols.data) ? generalCols.data : (generalCols as any)?.results || []);
 
-      // Virtualize opening balance installment history if borrower has paid count > 0 but 0 database records exist
+      // Virtualize pre-paid opening balance installment history if borrower has paid count > live database items length
       const targetCust = freshCust || customer;
       const paidCount = Number(targetCust.installments_paid_count || 0);
       const instAmt = Number(targetCust.installment_amount || (Number(targetCust.total_due || 0) / (targetCust.total_installments || 1)));
 
-      if (items.length === 0 && paidCount > 0 && instAmt > 0) {
+      if (items.length < paidCount && paidCount > 0 && instAmt > 0) {
+        const missingCount = paidCount - items.length;
         const openingDate = targetCust.start_date || new Date().toISOString().split("T")[0];
-        items = Array.from({ length: paidCount }, (_, i) => ({
+        const openingEntries: Collection[] = Array.from({ length: missingCount }, (_, i) => ({
           public_id: `opening-${targetCust.public_id}-${i + 1}`,
           receipt_number: `INIT-OPEN-${i + 1}`,
           customer_code: targetCust.customer_code,
@@ -144,9 +175,10 @@ export function BorrowerProfileDetailsModal({
           status_name: "Paid",
           payment_mode: 1,
           payment_mode_name: "Cash",
-          remarks: `Opening balance installment #${i + 1} paid for existing borrower`,
+          remarks: `Opening balance pre-paid installment #${i + 1} for existing borrower`,
           created_at: (targetCust as any).created_at || openingDate,
         }));
+        items = [...items, ...openingEntries];
       }
 
       setHistory(items);

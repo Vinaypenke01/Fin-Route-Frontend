@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2, ChevronLeft, ChevronRight, SlidersHorizontal, Clock } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2, ChevronLeft, ChevronRight, SlidersHorizontal, Clock, ChevronUp, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
@@ -93,22 +93,43 @@ function InstallmentPassbookGrid({
   const safePaid = Math.min(paid || 0, safeTotal);
   const remaining = Math.max(0, safeTotal - safePaid);
   const hasSkipped = skipped > 0;
-  const isCompletedWithBalance = safePaid >= safeTotal && outstanding > 0;
+  const isCompletedWithBalance = (safePaid + skipped) >= safeTotal && Number(outstanding) > 0;
+  const isFullySettledEarly = Number(outstanding) <= 0 && safePaid > 0 && safePaid < safeTotal;
+  const isFullyPaidOff = Number(outstanding) <= 0 && safePaid > 0;
 
   return (
     <div className="space-y-1.5 pt-1">
       <div className="flex flex-wrap items-center justify-between text-[11px] font-medium gap-1">
         <span className="text-muted-foreground font-semibold flex items-center gap-1">
           Progress:
-          <span className={hasSkipped ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30" : "text-emerald-700 dark:text-emerald-400 font-bold"}>
-            {safePaid} Paid {hasSkipped ? `(${skipped} Skipped)` : ""}
-          </span> / <span className="text-foreground">{safeTotal} Total</span>
+          <span
+            className={
+              isFullyPaidOff
+                ? "text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30"
+                : hasSkipped
+                  ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30"
+                  : "text-emerald-700 dark:text-emerald-400 font-bold"
+            }
+          >
+            {isFullyPaidOff ? `🎉 Fully Settled (${safePaid} Paid)` : `${safePaid} Paid`} {hasSkipped ? `(${skipped} Skipped)` : ""}
+          </span>{" "}
+          / <span className="text-foreground">{safeTotal} Total</span>
         </span>
 
         <div className="flex items-center gap-1">
-          <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
-            {remaining} Remaining
-          </Badge>
+          {isFullyPaidOff ? (
+            <Badge variant="outline" className="font-mono text-[10px] bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-300 font-bold">
+              {isFullySettledEarly ? `✅ Closed Early in ${safePaid} Inst.` : "✅ Fully Paid Off"}
+            </Badge>
+          ) : isCompletedWithBalance ? (
+            <Badge variant="outline" className="font-mono text-[10px] bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/50 font-extrabold">
+              ⚠️ Tenure Ended (Balance Due {inr(outstanding)})
+            </Badge>
+          ) : (
+            <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
+              {remaining} Remaining
+            </Badge>
+          )}
 
           {isCompletedWithBalance && onExtend && (
             <Button
@@ -116,10 +137,10 @@ function InstallmentPassbookGrid({
               variant="outline"
               size="sm"
               onClick={onExtend}
-              className="h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 font-bold gap-0.5"
-              title="Schedule installments completed but balance pending. Click to extend tenure."
+              className="h-5 px-1.5 text-[10px] bg-amber-600 hover:bg-amber-700 text-white border-amber-600 font-extrabold gap-0.5 shadow-xs"
+              title="Scheduled installments completed but balance pending. Click to extend tenure and add more installments!"
             >
-              <Calendar className="size-3 text-amber-600" /> + Extend
+              <Calendar className="size-3 text-white" /> + Add Installments
             </Button>
           )}
         </div>
@@ -140,24 +161,31 @@ function InstallmentPassbookGrid({
             isSkipped = !isPaid && num <= safePaid + safeSkipped;
           }
 
+          const isUnneededAfterFullSettlement = isFullyPaidOff && !isPaid && !isSkipped;
+
           return (
             <div
               key={num}
               title={
-                isPaid
-                  ? `Installment #${num}: PAID (Struck)`
-                  : isSkipped
-                    ? `Installment #${num}: SKIPPED (Struck Red)`
-                    : `Installment #${num}: Pending`
+                isFullyPaidOff && isUnneededAfterFullSettlement
+                  ? `Installment #${num}: Settled (Loan Paid in Full Early)`
+                  : isPaid
+                    ? `Installment #${num}: PAID (Struck)`
+                    : isSkipped
+                      ? `Installment #${num}: SKIPPED (Struck Red)`
+                      : `Installment #${num}: Pending`
               }
-              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${isPaid
+              className={`size-6 rounded text-[10px] font-mono font-bold flex items-center justify-center border transition-all ${
+                isPaid
                   ? "bg-emerald-600 text-white border-emerald-700 opacity-90 shadow-xs"
                   : isSkipped
                     ? "bg-rose-600 text-white border-rose-700 font-extrabold shadow-xs"
-                    : "bg-background text-muted-foreground border-border/80"
-                }`}
+                    : isUnneededAfterFullSettlement
+                      ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 opacity-70 line-through"
+                      : "bg-background text-muted-foreground border-border/80"
+              }`}
             >
-              {isPaid || isSkipped ? <s>{num}</s> : num}
+              {isPaid || isSkipped || isUnneededAfterFullSettlement ? <s>{num}</s> : num}
             </div>
           );
         })}
@@ -206,6 +234,9 @@ function CollectionsPage() {
   const [loadingCollections, setLoadingCollections] = useState<boolean>(true);
   const [loadingCustomers, setLoadingCustomers] = useState<boolean>(true);
   const [q, setQ] = useState("");
+  const [reconRefreshKey, setReconRefreshKey] = useState(0);
+
+  const triggerReconRefresh = () => setReconRefreshKey((k) => k + 1);
 
   const [markingPaidCustomer, setMarkingPaidCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
@@ -276,7 +307,6 @@ function CollectionsPage() {
     if (!earliestAnchorDate) return [];
     const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
 
-    // Adjust weekStart to Monday of earliestAnchorDate week
     let weekStart = new Date(earliestAnchorDate);
     if (isNaN(weekStart.getTime())) return [];
 
@@ -286,7 +316,18 @@ function CollectionsPage() {
 
     const now = new Date();
     let weekIndex = 1;
-    const dayNameMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const formatShortDate = (dStr: string) => {
+      try {
+        const [y, m, d] = dStr.split("-");
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]}`;
+      } catch {
+        return dStr;
+      }
+    };
+
+    const targetDays = activeTargetDaysOfWeek.length > 0 ? activeTargetDaysOfWeek : [1, 2, 3, 4, 5, 6, 0];
 
     while (weekIndex <= 156) {
       const weekEnd = new Date(weekStart);
@@ -295,28 +336,34 @@ function CollectionsPage() {
       const weekFromStr = weekStart.toISOString().slice(0, 10);
       const weekToStr = weekEnd.toISOString().slice(0, 10);
 
-      activeTargetDaysOfWeek.forEach((dNum) => {
+      // Compute configured dates for this week based on targetDays
+      const configuredDates: string[] = [];
+      targetDays.forEach((dNum) => {
         const cycleDate = new Date(weekStart);
         const offsetFromMon = (dNum + 6) % 7;
         cycleDate.setDate(cycleDate.getDate() + offsetFromMon);
+        configuredDates.push(cycleDate.toISOString().slice(0, 10));
+      });
 
-        const dateStr = cycleDate.toISOString().slice(0, 10);
-        const isCurrent = today === dateStr || (today >= weekFromStr && today <= weekToStr);
-        const dayLabel = dayNameMap[dNum];
+      configuredDates.sort();
 
-        cycles.push({
-          index: cycles.length + 1,
-          label: activeTargetDaysOfWeek.length > 1
-            ? `Week ${weekIndex} (${dayLabel}): ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`
-            : `Week ${weekIndex}: ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`,
-          dateFrom: dateStr,
-          dateTo: dateStr,
-          isCurrent,
-        });
+      const cycleFrom = configuredDates[0] || weekFromStr;
+      const cycleTo = configuredDates[configuredDates.length - 1] || weekToStr;
+      const isCurrent = today >= weekFromStr && today <= weekToStr;
+
+      const dateRangeLabel = cycleFrom === cycleTo
+        ? formatShortDate(cycleFrom)
+        : `${formatShortDate(cycleFrom)} - ${formatShortDate(cycleTo)}`;
+
+      cycles.push({
+        index: weekIndex,
+        label: `Week ${weekIndex} (${dateRangeLabel})${isCurrent ? " ★ Current Week" : ""}`,
+        dateFrom: cycleFrom,
+        dateTo: cycleTo,
+        isCurrent,
       });
 
       if (weekStart > now) break;
-
       weekStart.setDate(weekStart.getDate() + 7);
       weekIndex++;
     }
@@ -326,15 +373,26 @@ function CollectionsPage() {
 
   const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
 
-  // Auto-select current active week cycle whenever weeklyCycles loads/updates
+  // Auto-select active week cycle: restore from sessionStorage if available, else current active week
   useEffect(() => {
     if (weeklyCycles.length > 0 && !hasUserManuallySelectedCycle) {
-      const currentCycle = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
-      if (currentCycle) {
-        setSelectedCycleIndex(currentCycle.index);
-        setDateFrom(currentCycle.dateFrom);
-        setDateTo(currentCycle.dateTo);
-        setSelectedDate(currentCycle.dateFrom);
+      const savedCycleIdxStr = sessionStorage.getItem("finroute_active_week_cycle_index");
+      let cycleToSelect = null;
+
+      if (savedCycleIdxStr) {
+        const savedIdx = parseInt(savedCycleIdxStr, 10);
+        cycleToSelect = weeklyCycles.find((c) => c.index === savedIdx);
+      }
+
+      if (!cycleToSelect) {
+        cycleToSelect = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
+      }
+
+      if (cycleToSelect) {
+        setSelectedCycleIndex(cycleToSelect.index);
+        setDateFrom(cycleToSelect.dateFrom);
+        setDateTo(cycleToSelect.dateTo);
+        setSelectedDate(cycleToSelect.dateFrom);
       }
     }
   }, [weeklyCycles, hasUserManuallySelectedCycle]);
@@ -354,6 +412,7 @@ function CollectionsPage() {
       setDateTo(cycle.dateTo);
       setSelectedDate(cycle.dateFrom);
       setHasUserManuallySelectedCycle(true);
+      sessionStorage.setItem("finroute_active_week_cycle_index", String(cycle.index));
     }
   };
 
@@ -381,6 +440,7 @@ function CollectionsPage() {
   };
 
   const handlePresetToday = () => {
+    sessionStorage.removeItem("finroute_active_week_cycle_index");
     setDateFrom(today);
     setDateTo(today);
     setSelectedDate(today);
@@ -388,6 +448,7 @@ function CollectionsPage() {
   };
 
   const handlePresetYesterday = () => {
+    sessionStorage.removeItem("finroute_active_week_cycle_index");
     const d = new Date();
     d.setDate(d.getDate() - 1);
     const yStr = d.toISOString().slice(0, 10);
@@ -398,6 +459,7 @@ function CollectionsPage() {
   };
 
   const handlePresetThisWeek = () => {
+    sessionStorage.removeItem("finroute_active_week_cycle_index");
     const now = new Date();
     const dayOfWeek = now.getDay();
     const distanceToMon = (dayOfWeek + 6) % 7;
@@ -410,6 +472,7 @@ function CollectionsPage() {
   };
 
   const handlePresetThisMonth = () => {
+    sessionStorage.removeItem("finroute_active_week_cycle_index");
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -434,6 +497,8 @@ function CollectionsPage() {
     return `${formatFilterDate(dateFrom)} to ${formatFilterDate(dateTo)}`;
   };
 
+  const [isInitialReady, setIsInitialReady] = useState(false);
+
   const loadLines = async () => {
     try {
       const data = await guestWorkspaceService.getLines();
@@ -451,20 +516,15 @@ function CollectionsPage() {
 
       if (lineForToday) {
         setSelectedLine(lineForToday.public_id);
-        const todaySched = lineForToday.day_schedules?.find(
-          (s) => s.day_of_week.toLowerCase() === currentDayName
-        );
-        if (todaySched?.portion && todaySched.portion !== "both") {
-          setSelectedPortion(todaySched.portion);
-        } else {
-          setSelectedPortion(currentSessionPortion);
-        }
+        setSelectedPortion("all");
       } else if (loadedLines.length > 0) {
         setSelectedLine(loadedLines[0].public_id);
-        setSelectedPortion(currentSessionPortion);
+        setSelectedPortion("all");
       }
     } catch (err) {
       console.error("Failed to load lines:", err);
+    } finally {
+      setIsInitialReady(true);
     }
   };
 
@@ -490,17 +550,26 @@ function CollectionsPage() {
     }
   };
 
+  const [allLineCollections, setAllLineCollections] = useState<Collection[]>([]);
+
   const loadCollections = async () => {
     setLoadingCollections(true);
     try {
-      const res = await guestWorkspaceService.getCollections({
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        line: selectedLine === "all" ? undefined : selectedLine,
-        portion: selectedPortion === "all" ? undefined : selectedPortion,
-        page_size: 1000,
-      });
-      setCollections(res.data || []);
+      const [rangeRes, allRes] = await Promise.all([
+        guestWorkspaceService.getCollections({
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          line: selectedLine === "all" ? undefined : selectedLine,
+          portion: selectedPortion === "all" ? undefined : selectedPortion,
+          page_size: 1000,
+        }),
+        guestWorkspaceService.getCollections({
+          line: selectedLine === "all" ? undefined : selectedLine,
+          page_size: 2000,
+        }),
+      ]);
+      setCollections(rangeRes.data || []);
+      setAllLineCollections(allRes.data || []);
     } catch (err) {
       console.error("Failed to load collections:", err);
     } finally {
@@ -513,37 +582,17 @@ function CollectionsPage() {
     loadLines();
   }, []);
 
-  // Auto-sync selectedPortion whenever selected date or selected line changes
   useEffect(() => {
-    if (!dateFrom || selectedLine === "all") return;
-
-    const dObj = new Date(dateFrom);
-    if (isNaN(dObj.getTime())) return;
-
-    const targetDayName = dObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-    const activeLineObj = lines.find((l) => l.public_id === selectedLine);
-    const daySched = activeLineObj?.day_schedules?.find(
-      (s) => s.day_of_week.toLowerCase() === targetDayName
-    );
-
-    if (daySched?.portion && daySched.portion !== "both") {
-      setSelectedPortion(daySched.portion);
-    }
-  }, [dateFrom, selectedLine, lines]);
-
-  useEffect(() => {
+    if (!isInitialReady) return;
     loadCollections();
-  }, [dateFrom, dateTo, selectedLine, selectedPortion]);
+  }, [isInitialReady, dateFrom, dateTo, selectedLine, selectedPortion]);
 
   const loadRouteCustomers = async () => {
     setLoadingCustomers(true);
     try {
-      let dayFilter: string | undefined = selectedDay === "all" ? undefined : selectedDay;
-      if (dateFrom && (selectedCycleIndex !== null || dateFrom !== today)) {
-        const dObj = new Date(dateFrom);
-        if (!isNaN(dObj.getTime())) {
-          dayFilter = dObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-        }
+      let dayFilter: string | undefined = undefined;
+      if (selectedDay && selectedDay !== "all") {
+        dayFilter = selectedDay;
       }
 
       const res = await guestWorkspaceService.getCustomers({
@@ -553,7 +602,17 @@ function CollectionsPage() {
         portion: selectedPortion === "all" ? undefined : selectedPortion,
         page_size: 1000,
       });
-      setRouteCustomers(res.data || []);
+
+      let loaded = res.data || [];
+      if (dateTo) {
+        loaded = loaded.filter((c) => {
+          if (!c.start_date) return true;
+          const sDate = String(c.start_date).slice(0, 10);
+          return sDate <= dateTo;
+        });
+      }
+
+      setRouteCustomers(loaded);
     } catch (err) {
       console.error("Failed to load route customers:", err);
     } finally {
@@ -562,17 +621,21 @@ function CollectionsPage() {
   };
 
   useEffect(() => {
+    if (!isInitialReady) return;
     loadRouteCustomers();
-  }, [selectedDay, selectedLine, selectedPortion, dateFrom, selectedCycleIndex]);
+  }, [isInitialReady, selectedDay, selectedLine, selectedPortion, dateFrom, selectedCycleIndex]);
 
   const maxAllowedDays = workspace?.max_allowed_collection_days || (workspace?.subscription_plan === "free" ? 1 : 7);
   const isSingleDayPlan = configuredDays.length === 1;
   const isDaysSaved = configuredDays.length > 0;
 
   // Paid and Skipped sets on selected date or range
-  const { paidOnSelectedDateSet, skippedOnSelectedDateSet } = useMemo(() => {
+  const { paidOnSelectedDateSet, skippedOnSelectedDateSet, paidCustomerCount, skippedCustomerCount } = useMemo(() => {
     const paid = new Set<string>();
     const skipped = new Set<string>();
+    const paidCustomerIds = new Set<string>();
+    const skippedCustomerIds = new Set<string>();
+
     collections.forEach((c) => {
       const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
       const isOpeningBalance = c.remarks?.toLowerCase().includes("initial opening");
@@ -583,24 +646,32 @@ function CollectionsPage() {
       if (inRange && !isOpeningBalance) {
         const pId = c.customer_public_id ? String(c.customer_public_id).toLowerCase() : "";
         const cCode = c.customer_code ? String(c.customer_code).toLowerCase() : "";
+        const primaryKey = pId || cCode;
 
         if (isSkippedStatus) {
           if (pId) skipped.add(pId);
           if (cCode) skipped.add(cCode);
+          if (primaryKey) skippedCustomerIds.add(primaryKey);
         } else if (Number(c.collected_amount || 0) > 0 || c.status_code === "paid") {
           if (pId) paid.add(pId);
           if (cCode) paid.add(cCode);
+          if (primaryKey) paidCustomerIds.add(primaryKey);
         }
       }
     });
-    return { paidOnSelectedDateSet: paid, skippedOnSelectedDateSet: skipped };
+    return {
+      paidOnSelectedDateSet: paid,
+      skippedOnSelectedDateSet: skipped,
+      paidCustomerCount: paidCustomerIds.size,
+      skippedCustomerCount: skippedCustomerIds.size,
+    };
   }, [collections, dateFrom, dateTo]);
 
   const customerHistoryMap = useMemo(() => {
     const map: Record<string, ("paid" | "skipped")[]> = {};
     const customerCollectionsMap: Record<string, Collection[]> = {};
 
-    collections.forEach((col) => {
+    allLineCollections.forEach((col) => {
       const pId = col.customer_public_id ? String(col.customer_public_id).toLowerCase() : "";
       const cCode = col.customer_code ? String(col.customer_code).toLowerCase() : "";
 
@@ -619,11 +690,13 @@ function CollectionsPage() {
     });
 
     return map;
-  }, [collections]);
+  }, [allLineCollections]);
 
-  // Total Expected
+  // Total Expected (excludes fully settled accounts with 0 outstanding balance)
   const totalExpected = useMemo(() => {
-    return routeCustomers.reduce((s, c) => s + Number(c.installment_amount || c.loan_amount || 0), 0);
+    return routeCustomers
+      .filter((c) => Number(c.outstanding_balance || 0) > 0 && c.status !== "closed")
+      .reduce((s, c) => s + Number(c.installment_amount || c.loan_amount || 0), 0);
   }, [routeCustomers]);
 
   // Total Collected in Selected Date Range
@@ -672,6 +745,23 @@ function CollectionsPage() {
       return aPaid - bPaid;
     });
   }, [routeCustomers, q, paidOnSelectedDateSet]);
+  const { activePendingCustomers, fullySettledCustomers } = useMemo(() => {
+    const active: Customer[] = [];
+    const settled: Customer[] = [];
+
+    filteredCustomers.forEach((c) => {
+      const isSettled = Number(c.outstanding_balance || 0) <= 0 || c.status === "closed";
+      if (isSettled) {
+        settled.push(c);
+      } else {
+        active.push(c);
+      }
+    });
+
+    return { activePendingCustomers: active, fullySettledCustomers: settled };
+  }, [filteredCustomers]);
+
+  const [showFullySettledSection, setShowFullySettledSection] = useState(true);
 
   const filteredCollections = collections.filter((c) => {
     const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
@@ -688,9 +778,15 @@ function CollectionsPage() {
       {/* 0. Daily Cash Flow & Reconciliation Card for Selected Line */}
       <DailyCashReconciliationCard
         date={selectedDate}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
         line={selectedLine}
         lineName={lines.find((l) => l.public_id === selectedLine)?.name || (selectedLine === "all" ? "All Lines" : "Selected Route Line")}
-        onRefresh={loadCollections}
+        refreshTrigger={reconRefreshKey}
+        onRefresh={() => {
+          loadCollections();
+          triggerReconRefresh();
+        }}
       />
 
       {/* 1. Current Week Activity & Configured Collection Lines Card */}
@@ -987,11 +1083,81 @@ function CollectionsPage() {
                 <SelectValue placeholder="Select Collection Week Cycle..." />
               </SelectTrigger>
               <SelectContent className="max-h-64">
-                {weeklyCycles.map((cycle) => (
-                  <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
-                    {cycle.label}
-                  </SelectItem>
-                ))}
+                {weeklyCycles.map((cycle) => {
+                  const isFutureWeek = cycle.dateFrom > today;
+
+                  // Future weeks that have not arrived yet are upcoming
+                  if (isFutureWeek) {
+                    return (
+                      <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="font-semibold">{cycle.label}</span>
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-muted text-muted-foreground font-normal shrink-0">
+                            Upcoming
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    );
+                  }
+
+                  // Compute completion status for past/current cycle
+                  const cycleCollections = allLineCollections.filter((c) => {
+                    const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
+                    const isOpeningBalance = c.remarks?.toLowerCase().includes("initial opening");
+                    return entryDate >= cycle.dateFrom && entryDate <= cycle.dateTo && !isOpeningBalance;
+                  });
+
+                  const settledCustomerIds = new Set<string>();
+                  cycleCollections.forEach((c) => {
+                    const pId = c.customer_public_id ? String(c.customer_public_id).toLowerCase() : "";
+                    const cCode = c.customer_code ? String(c.customer_code).toLowerCase() : "";
+                    if (pId) settledCustomerIds.add(pId);
+                    if (cCode) settledCustomerIds.add(cCode);
+                  });
+
+                  // Active borrowers due for this week cycle (excludes accounts fully settled with 0 balance and no activity in this week)
+                  const borrowersForWeek = routeCustomers.filter((c) => {
+                    if (c.start_date && String(c.start_date).slice(0, 10) > cycle.dateTo) return false;
+                    const pId = String(c.public_id).toLowerCase();
+                    const cCode = String(c.customer_code).toLowerCase();
+                    const hasActivityInCycle = settledCustomerIds.has(pId) || settledCustomerIds.has(cCode);
+                    const hasOutstandingBalance = Number(c.outstanding_balance || 0) > 0 && c.status !== "closed";
+                    return hasOutstandingBalance || hasActivityInCycle;
+                  });
+
+                  const totalRouteBorrowers = borrowersForWeek.length;
+                  const settledCount = borrowersForWeek.filter((c) => {
+                    const pId = String(c.public_id).toLowerCase();
+                    const cCode = String(c.customer_code).toLowerCase();
+                    return settledCustomerIds.has(pId) || settledCustomerIds.has(cCode);
+                  }).length;
+
+                  const pendingCount = Math.max(0, totalRouteBorrowers - settledCount);
+                  const isCompleted = totalRouteBorrowers > 0 && pendingCount === 0 && settledCount > 0;
+
+                  return (
+                    <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="font-semibold">
+                          {isCompleted ? "✅ " : cycle.isCurrent ? "★ " : ""}{cycle.label}
+                        </span>
+                        {isCompleted ? (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold shrink-0">
+                            100% Completed
+                          </Badge>
+                        ) : cycle.isCurrent ? (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-primary/10 text-primary border-primary/30 font-bold shrink-0">
+                            Current Week
+                          </Badge>
+                        ) : pendingCount > 0 ? (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold shrink-0">
+                            {pendingCount} Pending
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -1041,280 +1207,179 @@ function CollectionsPage() {
         )}
       </Card>
 
-      {/* 3. Metrics Row (Total Expected, Total Collected & Unpaid/Skipped) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs">
-          <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Expected ({formatDateRangeLabel()})</p>
-          <p className="mt-1 font-display text-lg sm:text-2xl font-bold">{loadingCollections ? "..." : inr(totalExpected)}</p>
-        </Card>
-        <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs border-emerald-500/30 bg-emerald-500/5">
-          <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Total Collected ({formatDateRangeLabel()})</p>
-          <p className="mt-1 font-display text-lg sm:text-2xl font-bold text-emerald-600">{loadingCollections ? "..." : inr(totalCollectedForSelectedDate)}</p>
-        </Card>
-        <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs border-amber-500/30 bg-amber-500/5">
-          <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">Unpaid / Pending ({formatDateRangeLabel()})</p>
-          <p className="mt-1 font-display text-lg sm:text-2xl font-bold text-amber-600">{loadingCollections ? "..." : inr(Math.max(0, totalExpected - totalCollectedForSelectedDate))}</p>
-        </Card>
-      </div>
 
-      {/* 3. Route Day Customers List Card */}
-      <Card className="overflow-hidden">
-        {/* Card Header with title and batch button */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-4">
-          <div className="flex items-center gap-2">
-            <Users className="size-5 text-primary" />
-            <div>
-              <h3 className="text-sm font-bold flex items-center gap-1.5">
-                Borrowers on{" "}
-                <span className="text-primary capitalize font-mono">{selectedDay === "all" ? "All Days" : selectedDay}</span>{" "}
-                Route
-                {!loadingCustomers && (
-                  <span className="text-xs font-normal text-muted-foreground">
-                    ({filteredCustomers.length} borrowers · {paidOnSelectedDateSet.size} paid on {formatFilterDate(selectedDate)})
-                  </span>
-                )}
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Active installment passbook & payment status for <span className="font-semibold text-foreground">{formatFilterDate(selectedDate)}</span>.
-              </p>
-            </div>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/app/collections/batch" search={{ day: selectedDay }}>
-              <ListChecks className="size-4 mr-1" /> Batch Collect
-            </Link>
-          </Button>
-        </div>
-
-        {/* ─── Search & Date Filter Bar ─── */}
-        <div className="border-b border-border/60 p-4 bg-muted/20 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search by name, code or mobile…"
-                className="pl-9 h-9 text-xs"
-              />
+            {/* 1. Master Financial Summary Cards Header */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs">
+                <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Expected ({formatDateRangeLabel()})</p>
+                <p className="mt-1 font-display text-lg sm:text-2xl font-bold">{loadingCollections ? "..." : inr(totalExpected)}</p>
+              </Card>
+              <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs border-emerald-500/30 bg-emerald-500/5">
+                <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Total Collected ({formatDateRangeLabel()})</p>
+                <p className="mt-1 font-display text-lg sm:text-2xl font-bold text-emerald-600">{loadingCollections ? "..." : inr(totalCollectedForSelectedDate)}</p>
+              </Card>
+              <Card className="p-3.5 sm:p-4 bg-card border-border shadow-xs border-amber-500/30 bg-amber-500/5">
+                <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">Unpaid / Pending ({formatDateRangeLabel()})</p>
+                <p className="mt-1 font-display text-lg sm:text-2xl font-bold text-amber-600">{loadingCollections ? "..." : inr(Math.max(0, totalExpected - totalCollectedForSelectedDate))}</p>
+              </Card>
             </div>
 
-            {/* Date Picker Filter */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-3 py-1.5 text-xs shadow-xs">
-                <Calendar className="size-4 text-primary shrink-0" />
-                <span className="font-semibold text-muted-foreground hidden sm:inline">Collection Date:</span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value || today)}
-                  className="bg-transparent text-foreground font-mono font-bold focus:outline-none cursor-pointer"
-                />
+            {/* 3. Route Day Customers List Card */}
+            <Card className="overflow-hidden">
+              {/* Card Header with title and batch button */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-4">
+                <div className="flex items-center gap-2">
+                  <Users className="size-5 text-primary" />
+                  <div>
+                    <h3 className="text-sm font-bold flex items-center gap-1.5">
+                      Borrowers on{" "}
+                      <span className="text-primary capitalize font-mono">{selectedDay === "all" ? "All Days" : selectedDay}</span>{" "}
+                      Route
+                      {!loadingCustomers && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({activePendingCustomers.length} active pending · {paidCustomerCount} paid for {dateFrom && dateTo && dateFrom !== dateTo ? `${formatFilterDate(dateFrom)} - ${formatFilterDate(dateTo)}` : formatFilterDate(selectedDate)})
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Active installment passbook & payment status for <span className="font-semibold text-foreground">{dateFrom && dateTo && dateFrom !== dateTo ? `${formatFilterDate(dateFrom)} - ${formatFilterDate(dateTo)}` : formatFilterDate(selectedDate)}</span>.
+                    </p>
+                  </div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/app/collections/batch" search={{ day: selectedDay }}>
+                    <ListChecks className="size-4 mr-1" /> Batch Collect
+                  </Link>
+                </Button>
               </div>
 
-              {!isSelectedDateToday && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 text-xs px-2.5 font-semibold text-primary border-primary/30 hover:bg-primary/10"
-                  onClick={() => setSelectedDate(today)}
-                >
-                  Reset to Today
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[11px] font-semibold text-emerald-700">
-              <CheckCircle2 className="size-3.5" />
-              {paidOnSelectedDateSet.size} Paid on {formatFilterDate(selectedDate)}
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] font-semibold text-orange-700">
-              {routeCustomers.length - paidOnSelectedDateSet.size} Pending
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile View: Individual Cards */}
-        <div className="block md:hidden p-4 space-y-3">
-          {loadingCustomers ? (
-            <p className="text-center py-6 text-xs text-muted-foreground">Loading route customers...</p>
-          ) : filteredCustomers.length === 0 ? (
-            <p className="text-center py-6 text-xs text-muted-foreground">
-              No active borrowers assigned to {selectedDay === "all" ? "any day" : selectedDay}.
-            </p>
-          ) : (
-            filteredCustomers.map((c) => {
-              const pId = String(c.public_id).toLowerCase();
-              const cCode = String(c.customer_code).toLowerCase();
-              const isPaidOnDate = paidOnSelectedDateSet.has(pId) || paidOnSelectedDateSet.has(cCode);
-              const isSkippedOnDate = skippedOnSelectedDateSet.has(pId) || skippedOnSelectedDateSet.has(cCode);
-
-              return (
-                <div
-                  key={c.public_id}
-                  className={`p-3.5 rounded-xl border bg-card shadow-sm space-y-3 transition-all ${isPaidOnDate
-                      ? "border-emerald-500/40 bg-emerald-500/5 opacity-80"
-                      : isSkippedOnDate
-                        ? "border-amber-500/40 bg-amber-500/5"
-                        : "border-border"
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-2 border-b border-border/40 pb-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        {c.sequence_number && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
-                            #{c.sequence_number}
-                          </span>
-                        )}
-                        <h4 className="font-bold text-xs text-foreground">{c.full_name}</h4>
-                      </div>
-                      <p className="font-mono text-[11px] text-muted-foreground">{c.customer_code} • {c.mobile_number}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary border-primary/20">
-                        {c.collection_day || "monday"}
-                      </Badge>
-                      {isPaidOnDate ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-600 text-white">
-                          <CheckCircle2 className="size-3" /> {isSelectedDateToday ? "PAID TODAY" : `PAID (${formatFilterDate(selectedDate)})`}
-                        </span>
-                      ) : isSkippedOnDate ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                          SKIPPED ({formatFilterDate(selectedDate)})
-                        </span>
-                      ) : null}
-                    </div>
+              {/* ─── Search & Date Filter Bar ─── */}
+              <div className="border-b border-border/60 p-4 bg-muted/20 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  {/* Search Input */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Search by name, code or mobile…"
+                      className="pl-9 h-9 text-xs"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium">Disbursed Date:</span>
-                      <p className="font-medium font-mono text-foreground">{c.start_date ? formatFilterDate(c.start_date) : "-"}</p>
+                  {/* Date Picker Filter */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-3 py-1.5 text-xs shadow-xs">
+                      <Calendar className="size-4 text-primary shrink-0" />
+                      <span className="font-semibold text-muted-foreground hidden sm:inline">Collection Date:</span>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value || today)}
+                        className="bg-transparent text-foreground font-mono font-bold focus:outline-none cursor-pointer"
+                      />
                     </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium">Installment Due:</span>
-                      <p className="font-semibold font-mono text-emerald-700">{inr(c.installment_amount || c.loan_amount || 0)}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground font-medium">Outstanding:</span>
-                      <p className="font-bold font-mono text-primary">{inr(c.outstanding_balance || 0)}</p>
-                    </div>
-                  </div>
 
-                  <InstallmentPassbookGrid
-                    total={c.total_installments || 20}
-                    paid={c.installments_paid_count || 0}
-                    skipped={c.skipped_installments_count || 0}
-                    outstanding={c.outstanding_balance}
-                    onExtend={() => setExtendingCustomer(c)}
-                    historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
-                  />
-
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs px-2.5"
-                      onClick={() => setViewingCustomer(c)}
-                    >
-                      <Eye className="size-3.5 mr-1" /> View
-                    </Button>
-                    {!isPaidOnDate ? (
+                    {!isSelectedDateToday && (
                       <Button
+                        variant="outline"
                         size="sm"
-                        className="h-7 text-xs px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                        onClick={() => setMarkingPaidCustomer(c)}
+                        className="h-9 text-xs px-2.5 font-semibold text-primary border-primary/30 hover:bg-primary/10"
+                        onClick={() => setSelectedDate(today)}
                       >
-                        <CheckCircle2 className="size-3.5 mr-1" /> Mark as Paid
-                      </Button>
-                    ) : (
-                      <Button asChild size="sm" variant="outline" className="h-7 text-xs px-2.5">
-                        <Link to="/app/collections/new" search={{ customer: c.public_id }}>
-                          Record Entry <ArrowRight className="size-3 ml-1" />
-                        </Link>
+                        Reset to Today
                       </Button>
                     )}
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
 
-        {/* Desktop View: Table */}
-        <div className="hidden md:block overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead>Customer Code & Name</TableHead>
-                <TableHead>Mobile Number</TableHead>
-                <TableHead>Disbursed Date</TableHead>
-                <TableHead>Collection Day</TableHead>
-                <TableHead>Per Installment (₹)</TableHead>
-                <TableHead>Outstanding Balance</TableHead>
-                <TableHead className="min-w-[200px]">Installment Passbook</TableHead>
-                <TableHead>{formatFilterDate(selectedDate)} Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loadingCustomers ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
-                    Loading route customers...
-                  </TableCell>
-                </TableRow>
-              ) : filteredCustomers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
-                    No active borrowers assigned to {selectedDay === "all" ? "any day" : selectedDay}.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredCustomers.map((c) => {
-                  const pId = String(c.public_id).toLowerCase();
-                  const cCode = String(c.customer_code).toLowerCase();
-                  const isPaidOnDate = paidOnSelectedDateSet.has(pId) || paidOnSelectedDateSet.has(cCode);
-                  const isSkippedOnDate = skippedOnSelectedDateSet.has(pId) || skippedOnSelectedDateSet.has(cCode);
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[11px] font-semibold text-emerald-700">
+                    <CheckCircle2 className="size-3.5" />
+                    {paidCustomerCount} Paid for {dateFrom && dateTo && dateFrom !== dateTo ? `${formatFilterDate(dateFrom)} - ${formatFilterDate(dateTo)}` : formatFilterDate(selectedDate)}
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] font-semibold text-orange-700">
+                    {Math.max(0, activePendingCustomers.length - paidCustomerCount)} Pending
+                  </div>
+                  {fullySettledCustomers.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                      <CheckCircle2 className="size-3.5 text-emerald-600" />
+                      {fullySettledCustomers.length} Fully Settled (Paid in Full)
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                  return (
-                    <TableRow
-                      key={c.public_id}
-                      className={isPaidOnDate ? "bg-emerald-500/5 opacity-80" : isSkippedOnDate ? "bg-amber-500/5" : ""}
-                    >
-                      <TableCell>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            {c.sequence_number && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
-                                #{c.sequence_number}
-                              </span>
-                            )}
-                            <p className="font-semibold text-xs">{c.full_name}</p>
+              {/* Mobile View: Individual Cards */}
+              <div className="block md:hidden p-4 space-y-3">
+                {loadingCustomers ? (
+                  <p className="text-center py-6 text-xs text-muted-foreground">Loading route customers...</p>
+                ) : activePendingCustomers.length === 0 ? (
+                  <p className="text-center py-6 text-xs text-muted-foreground">
+                    No active pending borrowers assigned to {selectedDay === "all" ? "any day" : selectedDay}.
+                  </p>
+                ) : (
+                  activePendingCustomers.map((c) => {
+                    const pId = String(c.public_id).toLowerCase();
+                    const cCode = String(c.customer_code).toLowerCase();
+                    const isPaidOnDate = paidOnSelectedDateSet.has(pId) || paidOnSelectedDateSet.has(cCode);
+                    const isSkippedOnDate = skippedOnSelectedDateSet.has(pId) || skippedOnSelectedDateSet.has(cCode);
+                    const isFullySettled = Number(c.outstanding_balance || 0) <= 0 || c.status === "closed";
+
+                    return (
+                      <div
+                        key={c.public_id}
+                        className={`p-3.5 rounded-xl border text-xs space-y-2.5 transition-all ${
+                          isPaidOnDate ? "bg-emerald-500/5 border-emerald-500/30" : isSkippedOnDate ? "bg-amber-500/5 border-amber-500/30" : "bg-card border-border"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              {c.sequence_number && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
+                                  #{c.sequence_number}
+                                </span>
+                              )}
+                              <p className="font-bold text-sm text-foreground">{c.full_name}</p>
+                            </div>
+                            <p className="font-mono text-[11px] text-muted-foreground">{c.customer_code} · {c.mobile_number}</p>
                           </div>
-                          <p className="font-mono text-[11px] text-muted-foreground">{c.customer_code}</p>
+                          <div className="flex flex-col items-end gap-1">
+                            <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary border-primary/20">
+                              {c.collection_day || "monday"}
+                            </Badge>
+                            {isFullySettled ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 whitespace-nowrap">
+                                <CheckCircle2 className="size-3 text-emerald-600" /> FULLY SETTLED
+                              </span>
+                            ) : isPaidOnDate ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-600 text-white">
+                                <CheckCircle2 className="size-3" /> {isSelectedDateToday ? "PAID TODAY" : `PAID (${formatFilterDate(selectedDate)})`}
+                              </span>
+                            ) : isSkippedOnDate ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                SKIPPED ({formatFilterDate(selectedDate)})
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{c.mobile_number}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                        {c.start_date ? formatFilterDate(c.start_date) : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary border-primary/20">
-                          {c.collection_day || "monday"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-semibold text-xs text-emerald-700 font-mono">
-                        {inr(c.installment_amount || c.loan_amount || 0)}
-                      </TableCell>
-                      <TableCell className="font-bold text-xs text-primary font-mono">
-                        {inr(c.outstanding_balance || 0)}
-                      </TableCell>
-                      <TableCell className="py-2 min-w-[200px]">
+
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <span className="text-[10px] text-muted-foreground font-medium">Disbursed Date:</span>
+                            <p className="font-medium font-mono text-foreground">{c.start_date ? formatFilterDate(c.start_date) : "-"}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-muted-foreground font-medium">Installment Due:</span>
+                            <p className="font-semibold font-mono text-emerald-700">{inr(c.installment_amount || c.loan_amount || 0)}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-muted-foreground font-medium">Outstanding:</span>
+                            <p className="font-bold font-mono text-primary">{inr(c.outstanding_balance || 0)}</p>
+                          </div>
+                        </div>
+
                         <InstallmentPassbookGrid
                           total={c.total_installments || 20}
                           paid={c.installments_paid_count || 0}
@@ -1323,24 +1388,8 @@ function CollectionsPage() {
                           onExtend={() => setExtendingCustomer(c)}
                           historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
                         />
-                      </TableCell>
-                      <TableCell>
-                        {isPaidOnDate ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-600 text-white whitespace-nowrap">
-                            <CheckCircle2 className="size-3.5" /> {isSelectedDateToday ? "PAID TODAY" : `PAID (${formatFilterDate(selectedDate)})`}
-                          </span>
-                        ) : isSkippedOnDate ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap">
-                            SKIPPED ({formatFilterDate(selectedDate)})
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full bg-orange-500/15 text-orange-700 border border-orange-400/30 whitespace-nowrap">
-                            Pending
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+
+                        <div className="flex items-center justify-end gap-2 pt-1">
                           <Button
                             size="sm"
                             variant="outline"
@@ -1349,7 +1398,7 @@ function CollectionsPage() {
                           >
                             <Eye className="size-3.5 mr-1" /> View
                           </Button>
-                          {!isPaidOnDate ? (
+                          {!isFullySettled && (!isPaidOnDate ? (
                             <Button
                               size="sm"
                               className="h-7 text-xs px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
@@ -1363,17 +1412,263 @@ function CollectionsPage() {
                                 Record Entry <ArrowRight className="size-3 ml-1" />
                               </Link>
                             </Button>
-                          )}
+                          ))}
                         </div>
-                      </TableCell>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop View: Table for Active Pending Customers */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead>Customer Code & Name</TableHead>
+                      <TableHead>Mobile Number</TableHead>
+                      <TableHead>Disbursed Date</TableHead>
+                      <TableHead>Collection Day</TableHead>
+                      <TableHead>Per Installment (₹)</TableHead>
+                      <TableHead>Outstanding Balance</TableHead>
+                      <TableHead className="min-w-[200px]">Installment Passbook</TableHead>
+                      <TableHead>{formatFilterDate(selectedDate)} Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingCustomers ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
+                          Loading route customers...
+                        </TableCell>
+                      </TableRow>
+                    ) : activePendingCustomers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
+                          All active borrowers for this route selection have settled their installments or no pending borrowers found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      activePendingCustomers.map((c) => {
+                        const pId = String(c.public_id).toLowerCase();
+                        const cCode = String(c.customer_code).toLowerCase();
+                        const isPaidOnDate = paidOnSelectedDateSet.has(pId) || paidOnSelectedDateSet.has(cCode);
+                        const isSkippedOnDate = skippedOnSelectedDateSet.has(pId) || skippedOnSelectedDateSet.has(cCode);
+                        const isFullySettled = Number(c.outstanding_balance || 0) <= 0 || c.status === "closed";
+
+                        return (
+                          <TableRow
+                            key={c.public_id}
+                            className={isPaidOnDate ? "bg-emerald-500/5 opacity-80" : isSkippedOnDate ? "bg-amber-500/5" : ""}
+                          >
+                            <TableCell>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  {c.sequence_number && (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-primary/10 text-primary border border-primary/20">
+                                      #{c.sequence_number}
+                                    </span>
+                                  )}
+                                  <p className="font-semibold text-xs">{c.full_name}</p>
+                                </div>
+                                <p className="font-mono text-[11px] text-muted-foreground">{c.customer_code}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{c.mobile_number}</TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                              {c.start_date ? formatFilterDate(c.start_date) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="font-mono text-[10px] capitalize bg-primary/5 text-primary border-primary/20">
+                                {c.collection_day || "monday"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-semibold text-xs text-emerald-700 font-mono">
+                              {inr(c.installment_amount || c.loan_amount || 0)}
+                            </TableCell>
+                            <TableCell className="font-bold text-xs text-primary font-mono">
+                              {inr(c.outstanding_balance || 0)}
+                            </TableCell>
+                            <TableCell className="py-2 min-w-[200px]">
+                              <InstallmentPassbookGrid
+                                total={c.total_installments || 20}
+                                paid={c.installments_paid_count || 0}
+                                skipped={c.skipped_installments_count || 0}
+                                outstanding={c.outstanding_balance}
+                                onExtend={() => setExtendingCustomer(c)}
+                                historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {isFullySettled ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 whitespace-nowrap">
+                                  <CheckCircle2 className="size-3.5 text-emerald-600" /> FULLY SETTLED
+                                </span>
+                              ) : isPaidOnDate ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-600 text-white whitespace-nowrap">
+                                  <CheckCircle2 className="size-3.5" /> {isSelectedDateToday ? "PAID TODAY" : `PAID (${formatFilterDate(selectedDate)})`}
+                                </span>
+                              ) : isSkippedOnDate ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                  SKIPPED ({formatFilterDate(selectedDate)})
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full bg-orange-500/15 text-orange-700 border border-orange-400/30 whitespace-nowrap">
+                                  Pending
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs px-2.5"
+                                  onClick={() => setViewingCustomer(c)}
+                                >
+                                  <Eye className="size-3.5 mr-1" /> View
+                                </Button>
+                                {!isFullySettled && (!isPaidOnDate ? (
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                                    onClick={() => setMarkingPaidCustomer(c)}
+                                  >
+                                    <CheckCircle2 className="size-3.5 mr-1" /> Mark as Paid
+                                  </Button>
+                                ) : (
+                                  <Button asChild size="sm" variant="outline" className="h-7 text-xs px-2.5">
+                                    <Link to="/app/collections/new" search={{ customer: c.public_id }}>
+                                      Record Entry <ArrowRight className="size-3 ml-1" />
+                                    </Link>
+                                  </Button>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+
+            {/* 4. Dedicated Section for Fully Settled / Completed Loans */}
+            {fullySettledCustomers.length > 0 && (
+              <Card className="border-emerald-500/30 bg-emerald-500/5 overflow-hidden">
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer select-none border-b border-emerald-500/20"
+                  onClick={() => setShowFullySettledSection(!showFullySettledSection)}
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                        Fully Settled & Closed Accounts ({fullySettledCustomers.length} Borrower{fullySettledCustomers.length !== 1 ? "s" : ""})
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-700 border-emerald-500/40 font-bold">
+                          ₹0 Outstanding Balance
+                        </Badge>
+                      </h4>
+                      <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80 font-medium">
+                        Borrowers who have paid off all loan installments in full.
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs font-bold gap-1 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-500/20">
+                    {showFullySettledSection ? "Hide Completed" : "Show Completed"} ({fullySettledCustomers.length})
+                    {showFullySettledSection ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  </Button>
+                </div>
+
+                {showFullySettledSection && (
+                  <div className="p-2 overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-emerald-500/10">
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Customer Code & Name</TableHead>
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Mobile Number</TableHead>
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Disbursed Date</TableHead>
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Collection Day</TableHead>
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Outstanding Balance</TableHead>
+                          <TableHead className="min-w-[200px] text-emerald-900 dark:text-emerald-200">Installment Passbook</TableHead>
+                          <TableHead className="text-emerald-900 dark:text-emerald-200">Account Status</TableHead>
+                          <TableHead className="text-right text-emerald-900 dark:text-emerald-200">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {fullySettledCustomers.map((c) => {
+                          const pId = String(c.public_id).toLowerCase();
+                          const cCode = String(c.customer_code).toLowerCase();
+
+                          return (
+                            <TableRow key={c.public_id} className="bg-background/60">
+                              <TableCell>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    {c.sequence_number && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-extrabold font-mono rounded bg-emerald-500/20 text-emerald-800 border border-emerald-500/30">
+                                        #{c.sequence_number}
+                                      </span>
+                                    )}
+                                    <p className="font-semibold text-xs text-foreground">{c.full_name}</p>
+                                  </div>
+                                  <p className="font-mono text-[11px] text-muted-foreground">{c.customer_code}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{c.mobile_number}</TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                {c.start_date ? formatFilterDate(c.start_date) : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-mono text-[10px] capitalize bg-emerald-500/10 text-emerald-700 border-emerald-500/20">
+                                  {c.collection_day || "monday"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-bold text-xs text-emerald-700 font-mono">
+                                {inr(0)}
+                              </TableCell>
+                              <TableCell className="py-2 min-w-[200px]">
+                                <InstallmentPassbookGrid
+                                  total={c.total_installments || 20}
+                                  paid={c.installments_paid_count || 0}
+                                  skipped={c.skipped_installments_count || 0}
+                                  outstanding={0}
+                                  historyStatuses={customerHistoryMap[pId] || customerHistoryMap[cCode]}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 whitespace-nowrap">
+                                  <CheckCircle2 className="size-3.5 text-emerald-600" /> FULLY SETTLED
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs px-2.5"
+                                    onClick={() => setViewingCustomer(c)}
+                                  >
+                                    <Eye className="size-3.5 mr-1" /> View
+                                  </Button>
+                                  <Button asChild size="sm" variant="outline" className="h-7 text-xs px-2.5">
+                                    <Link to="/app/collections/new" search={{ customer: c.public_id }}>
+                                      Record Entry <ArrowRight className="size-3 ml-1" />
+                                    </Link>
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </Card>
+            )}
 
       {/* Pop-up Modal: View Customer Details & Payment History */}
       {viewingCustomer && (
@@ -1396,6 +1691,7 @@ function CollectionsPage() {
             setMarkingPaidCustomer(null);
             loadRouteCustomers();
             loadCollections();
+            triggerReconRefresh();
           }}
         />
       )}
@@ -1488,6 +1784,7 @@ function CollectionsPage() {
           onSuccess={() => {
             loadCollections();
             loadRouteCustomers();
+            triggerReconRefresh();
           }}
         />
       )}
@@ -1724,6 +2021,7 @@ function ViewCustomerHistoryModal({
   onRefresh?: () => void;
 }) {
   const [detail, setDetail] = useState<Customer>(customer);
+  const [fetchedHistory, setFetchedHistory] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [draftDates, setDraftDates] = useState<Record<string, string>>({});
@@ -1735,8 +2033,43 @@ function ViewCustomerHistoryModal({
     if (!customer) return;
     setLoading(true);
     try {
-      const fresh = await guestWorkspaceService.getCustomerDetail(customer.public_id);
+      const [fresh, collections] = await Promise.all([
+        guestWorkspaceService.getCustomerDetail(customer.public_id).catch(() => null),
+        guestWorkspaceService.getCustomerCollections(customer.public_id).catch(() => []),
+      ]);
       if (fresh) setDetail(fresh);
+
+      let items: Collection[] = collections || [];
+
+      // Virtualize missing pre-paid opening balance installment entries
+      const targetCust = fresh || customer;
+      const paidCount = Number(targetCust.installments_paid_count || 0);
+      const instAmt = Number(targetCust.installment_amount || (Number(targetCust.total_due || 0) / (targetCust.total_installments || 1)));
+
+      if (items.length < paidCount && paidCount > 0 && instAmt > 0) {
+        const missingCount = paidCount - items.length;
+        const openingDate = targetCust.start_date || new Date().toISOString().split("T")[0];
+        const openingEntries: Collection[] = Array.from({ length: missingCount }, (_, i) => ({
+          public_id: `opening-${targetCust.public_id}-${i + 1}`,
+          receipt_number: `INIT-OPEN-${i + 1}`,
+          customer_code: targetCust.customer_code,
+          customer_name: targetCust.full_name,
+          customer_public_id: targetCust.public_id,
+          collection_date: openingDate,
+          expected_amount: instAmt,
+          collected_amount: instAmt,
+          status: 1,
+          status_code: "paid",
+          status_name: "Paid",
+          payment_mode: 1,
+          payment_mode_name: "Cash",
+          remarks: `Opening balance pre-paid installment #${i + 1} for existing borrower`,
+          created_at: (targetCust as any).created_at || openingDate,
+        }));
+        items = [...items, ...openingEntries];
+      }
+
+      setFetchedHistory(items);
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error("Failed to load fresh customer detail:", err);
@@ -1755,6 +2088,7 @@ function ViewCustomerHistoryModal({
   }, [open, customer]);
 
   const history = useMemo(() => {
+    if (fetchedHistory.length > 0) return fetchedHistory;
     if (!customer) return [];
     const pId = String(customer.public_id).toLowerCase();
     const cCode = String(customer.customer_code).toLowerCase();
@@ -1763,7 +2097,7 @@ function ViewCustomerHistoryModal({
       const ccCode = c.customer_code ? String(c.customer_code).toLowerCase() : "";
       return (cpId && cpId === pId) || (ccCode && ccCode === cCode);
     });
-  }, [allCollections, customer]);
+  }, [fetchedHistory, allCollections, customer]);
 
   const activeCustomer = detail || customer;
   const totalCollected = history.reduce((s, h) => s + Number(h.collected_amount || 0), 0);

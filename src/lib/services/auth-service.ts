@@ -32,6 +32,8 @@ export interface LoginResponseData {
   workspace: WorkspaceSummary | null;
 }
 
+let _getMePromise: Promise<UserProfile> | null = null;
+
 export const authService = {
   /**
    * Log in with mobile number/identifier + password.
@@ -160,14 +162,46 @@ export const authService = {
       }
     }
     clearTokens();
+    try {
+      sessionStorage.removeItem("finroute_user_profile");
+    } catch {}
   },
 
   /**
-   * Fetch current authenticated user profile.
+   * Fetch current authenticated user profile (with deduplication & fallback cache).
    */
   async getMe(): Promise<UserProfile> {
-    const res = await apiRequest<UserProfile>("/auth/me/");
-    return res.data;
+    if (_getMePromise) {
+      return _getMePromise;
+    }
+
+    _getMePromise = (async () => {
+      try {
+        const res = await apiRequest<UserProfile>("/auth/me/");
+        if (res.data) {
+          try {
+            sessionStorage.setItem("finroute_user_profile", JSON.stringify({ data: res.data, ts: Date.now() }));
+          } catch {}
+        }
+        return res.data;
+      } catch (err: any) {
+        // If rate-limited or error occurs, check if we have a valid cached profile
+        try {
+          const cached = sessionStorage.getItem("finroute_user_profile");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed?.data) {
+              return parsed.data as UserProfile;
+            }
+          }
+        } catch {}
+        throw err;
+      } finally {
+        _getMePromise = null;
+      }
+    })();
+
+    return _getMePromise;
   },
 
   /**

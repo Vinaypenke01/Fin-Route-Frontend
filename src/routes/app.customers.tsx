@@ -73,22 +73,43 @@ function InstallmentPassbookGrid({
   const safePaid = Math.min(paid || 0, safeTotal);
   const remaining = Math.max(0, safeTotal - safePaid);
   const hasSkipped = skipped > 0;
-  const isCompletedWithBalance = safePaid >= safeTotal && outstanding > 0;
+  const isCompletedWithBalance = (safePaid + skipped) >= safeTotal && Number(outstanding) > 0;
+  const isFullySettledEarly = Number(outstanding) <= 0 && safePaid > 0 && safePaid < safeTotal;
+  const isFullyPaidOff = Number(outstanding) <= 0 && safePaid > 0;
 
   return (
     <div className="space-y-1.5 pt-1">
       <div className="flex flex-wrap items-center justify-between text-[11px] font-medium gap-1">
         <span className="text-muted-foreground font-semibold flex items-center gap-1">
           Progress:
-          <span className={hasSkipped ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30" : "text-emerald-700 dark:text-emerald-400 font-bold"}>
-            {safePaid} Paid {hasSkipped ? `(${skipped} Skipped)` : ""}
-          </span> / <span className="text-foreground">{safeTotal} Total</span>
+          <span
+            className={
+              isFullyPaidOff
+                ? "text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30"
+                : hasSkipped
+                  ? "text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30"
+                  : "text-emerald-700 dark:text-emerald-400 font-bold"
+            }
+          >
+            {isFullyPaidOff ? `🎉 Fully Settled (${safePaid} Paid)` : `${safePaid} Paid`} {hasSkipped ? `(${skipped} Skipped)` : ""}
+          </span>{" "}
+          / <span className="text-foreground">{safeTotal} Total</span>
         </span>
 
         <div className="flex items-center gap-1">
-          <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
-            {remaining} Remaining
-          </Badge>
+          {isFullyPaidOff ? (
+            <Badge variant="outline" className="font-mono text-[10px] bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-300 font-bold">
+              {isFullySettledEarly ? `✅ Closed Early in ${safePaid} Inst.` : "✅ Fully Paid Off"}
+            </Badge>
+          ) : isCompletedWithBalance ? (
+            <Badge variant="outline" className="font-mono text-[10px] bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/50 font-extrabold">
+              ⚠️ Tenure Ended (Balance Due {inr(outstanding)})
+            </Badge>
+          ) : (
+            <Badge variant="outline" className={`font-mono text-[10px] ${hasSkipped ? "text-rose-600 border-rose-300 dark:text-rose-400" : ""}`}>
+              {remaining} Remaining
+            </Badge>
+          )}
 
           {isCompletedWithBalance && onExtend && (
             <Button
@@ -96,10 +117,10 @@ function InstallmentPassbookGrid({
               variant="outline"
               size="sm"
               onClick={onExtend}
-              className="h-5 px-1.5 text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25 font-bold gap-0.5"
-              title="Schedule installments completed but balance pending. Click to extend tenure."
+              className="h-5 px-1.5 text-[10px] bg-amber-600 hover:bg-amber-700 text-white border-amber-600 font-extrabold gap-0.5 shadow-xs"
+              title="Scheduled installments completed but balance pending. Click to extend tenure and add more installments!"
             >
-              <Calendar className="size-3 text-amber-600" /> + Extend
+              <Calendar className="size-3 text-white" /> + Add Installments
             </Button>
           )}
         </div>
@@ -120,11 +141,15 @@ function InstallmentPassbookGrid({
             isSkipped = !isPaid && num <= safePaid + safeSkipped;
           }
 
+          const isUnneededAfterFullSettlement = isFullyPaidOff && !isPaid && !isSkipped;
+
           return (
             <div
               key={num}
               title={
-                isPaid
+                isFullyPaidOff && isUnneededAfterFullSettlement
+                  ? `Installment #${num}: Settled (Loan Paid in Full Early)`
+                  : isPaid
                   ? `Installment #${num}: PAID (Struck)`
                   : isSkipped
                   ? `Installment #${num}: SKIPPED (Struck Red)`
@@ -135,10 +160,12 @@ function InstallmentPassbookGrid({
                   ? "bg-emerald-600 text-white border-emerald-700 opacity-90 shadow-xs"
                   : isSkipped
                   ? "bg-rose-600 text-white border-rose-700 font-extrabold shadow-xs"
+                  : isUnneededAfterFullSettlement
+                  ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 opacity-70 line-through"
                   : "bg-background text-muted-foreground border-border/80"
               }`}
             >
-              {isPaid || isSkipped ? <s>{num}</s> : num}
+              {isPaid || isSkipped || isUnneededAfterFullSettlement ? <s>{num}</s> : num}
             </div>
           );
         })}

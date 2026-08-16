@@ -166,7 +166,6 @@ function ExpensesPage() {
     if (!earliestAnchorDate) return [];
     const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
 
-    // Adjust weekStart to Monday of earliestAnchorDate week
     let weekStart = new Date(earliestAnchorDate);
     if (isNaN(weekStart.getTime())) return [];
 
@@ -176,19 +175,18 @@ function ExpensesPage() {
 
     const now = new Date();
     let weekIndex = 1;
-    const dayNameMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    const formatFilterDate = (dStr: string) => {
-      if (!dStr) return "All";
-      if (dStr === today) return "Today";
+    const formatShortDate = (dStr: string) => {
       try {
         const [y, m, d] = dStr.split("-");
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+        return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]}`;
       } catch {
         return dStr;
       }
     };
+
+    const targetDays = activeTargetDaysOfWeek.length > 0 ? activeTargetDaysOfWeek : [1, 2, 3, 4, 5, 6, 0];
 
     while (weekIndex <= 156) {
       const weekEnd = new Date(weekStart);
@@ -197,28 +195,34 @@ function ExpensesPage() {
       const weekFromStr = weekStart.toISOString().slice(0, 10);
       const weekToStr = weekEnd.toISOString().slice(0, 10);
 
-      activeTargetDaysOfWeek.forEach((dNum) => {
+      // Compute configured dates for this week based on targetDays
+      const configuredDates: string[] = [];
+      targetDays.forEach((dNum) => {
         const cycleDate = new Date(weekStart);
         const offsetFromMon = (dNum + 6) % 7;
         cycleDate.setDate(cycleDate.getDate() + offsetFromMon);
+        configuredDates.push(cycleDate.toISOString().slice(0, 10));
+      });
 
-        const dateStr = cycleDate.toISOString().slice(0, 10);
-        const isCurrent = today === dateStr || (today >= weekFromStr && today <= weekToStr);
-        const dayLabel = dayNameMap[dNum];
+      configuredDates.sort();
 
-        cycles.push({
-          index: cycles.length + 1,
-          label: activeTargetDaysOfWeek.length > 1
-            ? `Week ${weekIndex} (${dayLabel}): ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`
-            : `Week ${weekIndex}: ${formatFilterDate(dateStr)}${isCurrent && today === dateStr ? " (Today)" : isCurrent ? " (Active)" : ""}`,
-          dateFrom: dateStr,
-          dateTo: dateStr,
-          isCurrent,
-        });
+      const cycleFrom = configuredDates[0] || weekFromStr;
+      const cycleTo = configuredDates[configuredDates.length - 1] || weekToStr;
+      const isCurrent = today >= weekFromStr && today <= weekToStr;
+
+      const dateRangeLabel = cycleFrom === cycleTo
+        ? formatShortDate(cycleFrom)
+        : `${formatShortDate(cycleFrom)} - ${formatShortDate(cycleTo)}`;
+
+      cycles.push({
+        index: weekIndex,
+        label: `Week ${weekIndex} (${dateRangeLabel})${isCurrent ? " ★ Current Week" : ""}`,
+        dateFrom: cycleFrom,
+        dateTo: cycleTo,
+        isCurrent,
       });
 
       if (weekStart > now) break;
-
       weekStart.setDate(weekStart.getDate() + 7);
       weekIndex++;
     }
@@ -228,14 +232,25 @@ function ExpensesPage() {
 
   const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
 
-  // Auto-select current active week cycle whenever weeklyCycles loads/updates
+  // Auto-select active week cycle: restore from sessionStorage if available, else current active week
   useEffect(() => {
     if (weeklyCycles.length > 0 && !hasUserManuallySelectedCycle) {
-      const currentCycle = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
-      if (currentCycle) {
-        setSelectedCycleIndex(currentCycle.index);
-        setDateFrom(currentCycle.dateFrom);
-        setDateTo(currentCycle.dateTo);
+      const savedCycleIdxStr = sessionStorage.getItem("finroute_active_week_cycle_index");
+      let cycleToSelect = null;
+
+      if (savedCycleIdxStr) {
+        const savedIdx = parseInt(savedCycleIdxStr, 10);
+        cycleToSelect = weeklyCycles.find((c) => c.index === savedIdx);
+      }
+
+      if (!cycleToSelect) {
+        cycleToSelect = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
+      }
+
+      if (cycleToSelect) {
+        setSelectedCycleIndex(cycleToSelect.index);
+        setDateFrom(cycleToSelect.dateFrom);
+        setDateTo(cycleToSelect.dateTo);
       }
     }
   }, [weeklyCycles, hasUserManuallySelectedCycle]);
@@ -247,6 +262,7 @@ function ExpensesPage() {
       setDateFrom(cycle.dateFrom);
       setDateTo(cycle.dateTo);
       setHasUserManuallySelectedCycle(true);
+      sessionStorage.setItem("finroute_active_week_cycle_index", String(cycle.index));
     }
   };
 
@@ -274,6 +290,7 @@ function ExpensesPage() {
   };
 
   const handlePresetToday = () => {
+    sessionStorage.removeItem("finroute_active_week_cycle_index");
     const t = getTodayStr();
     setDateFrom(t);
     setDateTo(t);
@@ -690,6 +707,7 @@ function AddExpenseModal({
         line: selectedLineId || undefined,
       } as any);
       setOpen(false);
+      window.dispatchEvent(new CustomEvent("finroute:recon_refresh"));
       onSuccess();
     } catch (err: any) {
       setError(err.message || "Failed to record expense.");
