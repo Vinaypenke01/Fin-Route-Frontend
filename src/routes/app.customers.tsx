@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input, PhoneInput } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { BorrowerProfileDetailsModal } from "@/components/borrower-profile-modal
 import { ExtendInstallmentsDialog } from "@/components/extend-installments-dialog";
 import { LineSetupDialog } from "@/components/line-setup-dialog";
 import { ReassignRouteDialog } from "@/components/reassign-route-dialog";
+import { MigrationOnboardingWizardModal } from "@/components/migration-onboarding-modal";
 import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
 import { guestWorkspaceService, Customer, WorkspaceData, Collection, CollectionLine } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
@@ -200,6 +201,7 @@ function CustomersPage() {
   const [reassigningCustomer, setReassigningCustomer] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
 
   // Collection Days Configuration State
   const [configuredDays, setConfiguredDays] = useState<string[]>([]);
@@ -623,6 +625,13 @@ function CustomersPage() {
         }}
       />
 
+      <MigrationOnboardingWizardModal
+        open={isMigrationModalOpen}
+        onOpenChange={setIsMigrationModalOpen}
+        lines={lines}
+        onSuccess={() => loadCustomers()}
+      />
+
       {/* 2. Customer List Header & Action Bar */}
       <Card>
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center">
@@ -647,6 +656,17 @@ function CustomersPage() {
 
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9 px-3 text-xs sm:text-sm">
               <Download className="size-3.5 mr-1" /> Export
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 text-xs sm:text-sm border-amber-500/40 text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-bold gap-1"
+            >
+              <Link to="/app/migration">
+                <Sparkles className="size-3.5 text-amber-500" /> Digital Migration
+              </Link>
             </Button>
 
             <Button
@@ -1033,12 +1053,12 @@ function NewCustomerModal({
   lines?: CollectionLine[];
 }) {
   const [isExistingBorrower, setIsExistingBorrower] = useState(false);
-  const [sequenceNumber, setSequenceNumber] = useState<number | "">("");
+  const [sequenceNumber, setSequenceNumber] = useState<string>("");
   const [fullName, setFullName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [loanAmount, setLoanAmount] = useState(50000);
-  const [disbursedAmount, setDisbursedAmount] = useState(48000);
-  const [interestRate, setInterestRate] = useState(20);
+  const [loanAmount, setLoanAmount] = useState<string>("50000");
+  const [disbursedAmount, setDisbursedAmount] = useState<string>("48000");
+  const [interestRate, setInterestRate] = useState<string>("20");
   const [collectionDay, setCollectionDay] = useState(defaultDay);
   const [selectedLineId, setSelectedLineId] = useState<string>("");
   const [selectedPortion, setSelectedPortion] = useState<"morning" | "afternoon" | "both">("both");
@@ -1073,10 +1093,10 @@ function NewCustomerModal({
   }, [selectedLineId, collectionDay]);
 
   // Installments state
-  const [totalInstallmentsInput, setTotalInstallmentsInput] = useState(100);
-  const [installmentsPaidCount, setInstallmentsPaidCount] = useState(20);
-  const [remainingInstallmentsCount, setRemainingInstallmentsCount] = useState(80);
-  const [amountAlreadyCollected, setAmountAlreadyCollected] = useState(12000);
+  const [totalInstallmentsInput, setTotalInstallmentsInput] = useState<string>("100");
+  const [installmentsPaidCount, setInstallmentsPaidCount] = useState<string>("20");
+  const [remainingInstallmentsCount, setRemainingInstallmentsCount] = useState<string>("80");
+  const [amountAlreadyCollected, setAmountAlreadyCollected] = useState<string>("12000");
   const [customInstallmentAmount, setCustomInstallmentAmount] = useState<string>("");
   const [isCustomInstallmentEdited, setIsCustomInstallmentEdited] = useState(false);
 
@@ -1093,14 +1113,14 @@ function NewCustomerModal({
     setSequenceNumber("");
     setFullName("");
     setMobileNumber("");
-    setLoanAmount(50000);
-    setDisbursedAmount(48000);
-    setInterestRate(20);
+    setLoanAmount("50000");
+    setDisbursedAmount("48000");
+    setInterestRate("20");
     setCollectionDay(configuredDays.includes(defaultDay) ? defaultDay : (configuredDays[0] || "monday"));
-    setTotalInstallmentsInput(100);
-    setInstallmentsPaidCount(20);
-    setRemainingInstallmentsCount(80);
-    setAmountAlreadyCollected(12000);
+    setTotalInstallmentsInput("100");
+    setInstallmentsPaidCount("20");
+    setRemainingInstallmentsCount("80");
+    setAmountAlreadyCollected("12000");
     setCustomInstallmentAmount("");
     setIsCustomInstallmentEdited(false);
     setStartDate(new Date().toISOString().split("T")[0]);
@@ -1132,168 +1152,110 @@ function NewCustomerModal({
   }, [open]);
 
   // Dynamic Calculations
-  const totalPayable = loanAmount + (loanAmount * interestRate) / 100;
+  const loanAmtNum = Number(loanAmount) || 0;
+  const interestRateNum = Number(interestRate) || 0;
+  const paidCountNum = Number(installmentsPaidCount) || 0;
+  const remCountNum = Number(remainingInstallmentsCount) || 0;
+  const totalInstNum = Number(totalInstallmentsInput) || 1;
+
+  const totalPayable = loanAmtNum + (loanAmtNum * interestRateNum) / 100;
 
   const effectiveTotalInstallments = isExistingBorrower
-    ? installmentsPaidCount + remainingInstallmentsCount
-    : totalInstallmentsInput;
+    ? paidCountNum + remCountNum
+    : totalInstNum;
 
-  const calculatedPerInstallment = effectiveTotalInstallments > 0 ? totalPayable / effectiveTotalInstallments : 0;
+  const calculatedPerInstallment = effectiveTotalInstallments > 0
+    ? totalPayable / effectiveTotalInstallments
+    : 0;
 
-  // Auto-fill customInstallmentAmount when loan details change unless manually edited
+  const finalInstallmentAmount = isCustomInstallmentEdited && customInstallmentAmount !== ""
+    ? Number(customInstallmentAmount) || 0
+    : Math.round(calculatedPerInstallment);
+
   useEffect(() => {
     if (!isCustomInstallmentEdited) {
-      if (calculatedPerInstallment > 0) {
-        setCustomInstallmentAmount(Math.round(calculatedPerInstallment).toString());
-      } else {
-        setCustomInstallmentAmount("");
-      }
+      setCustomInstallmentAmount(Math.round(calculatedPerInstallment).toString());
     }
   }, [calculatedPerInstallment, isCustomInstallmentEdited]);
 
-  const effectivePerInstallment =
-    customInstallmentAmount.trim() !== "" && !isNaN(Number(customInstallmentAmount))
-      ? Number(customInstallmentAmount)
-      : Math.round(calculatedPerInstallment * 100) / 100;
-
-  const remainingOutstanding = isExistingBorrower
-    ? Math.max(0, totalPayable - amountAlreadyCollected)
-    : totalPayable;
-  const nextDueInstallmentNo = isExistingBorrower ? installmentsPaidCount + 1 : 1;
-
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     setError(null);
 
-    // 1. Borrower Name Validation
-    const trimmedName = fullName.trim();
-    if (!trimmedName || trimmedName.length < 3) {
-      setError("Please enter borrower's full name (minimum 3 characters).");
-      return;
-    }
-
-    // 2. Mobile Number Validation (Indian 10-digit format starting with 6-9)
-    const mobileVal = validateMobileNumber(mobileNumber);
-    if (!mobileVal.isValid) {
-      setError(mobileVal.error || "Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9 (e.g. 9876543210).");
-      return;
-    }
-    const cleanMobile = mobileVal.cleaned;
-
-    // 3. Principal & Disbursed Loan Validation
-    if (!loanAmount || loanAmount <= 0) {
-      setError("Principal loan amount must be greater than ₹0.");
-      return;
-    }
-    if (disbursedAmount < 0) {
-      setError("Disbursed amount cannot be negative.");
-      return;
-    }
-    if (interestRate < 0) {
-      setError("Interest rate cannot be negative.");
-      return;
-    }
-
-    // 4. Installments & Frequency Validation
-    if (!selectedFreq) {
-      setError("Please select a collection frequency.");
-      return;
-    }
-    if (!selectedInterestType) {
-      setError("Please select an interest calculation type.");
-      return;
-    }
-    if (!isExistingBorrower && (!totalInstallmentsInput || totalInstallmentsInput < 1)) {
-      setError("Total installments must be at least 1.");
-      return;
-    }
-    if (isExistingBorrower && remainingInstallmentsCount < 1) {
-      setError("Remaining installments count must be at least 1.");
-      return;
-    }
-
-    setSubmitting(true);
-    const fullMobile = `+91${cleanMobile}`;
+    const fullMobile = mobileNumber.startsWith("+91") ? mobileNumber : `+91${mobileNumber.replace(/^\+91/, "").trim()}`;
 
     try {
       await guestWorkspaceService.createCustomer({
-        sequence_number: sequenceNumber !== "" ? Number(sequenceNumber) : null,
-        full_name: trimmedName,
+        sequence_number: sequenceNumber.trim() !== "" ? Number(sequenceNumber) : undefined,
+        full_name: fullName,
         mobile_number: fullMobile,
-        loan_amount: loanAmount,
-        disbursed_amount: disbursedAmount,
-        interest_rate: interestRate,
+        loan_amount: loanAmtNum,
+        disbursed_amount: Number(disbursedAmount) || loanAmtNum,
+        interest_rate: interestRateNum,
         collection_frequency: selectedFreq,
         collection_day: collectionDay,
         line: selectedLineId || undefined,
         portion: selectedPortion,
         interest_type: selectedInterestType,
-        start_date: startDate,
         is_existing_borrower: isExistingBorrower,
         total_installments: effectiveTotalInstallments,
-        installments_paid_count: isExistingBorrower ? installmentsPaidCount : 0,
-        remaining_installments_count: isExistingBorrower ? remainingInstallmentsCount : effectiveTotalInstallments,
-        amount_already_collected: isExistingBorrower ? amountAlreadyCollected : 0,
-        installment_amount: effectivePerInstallment,
+        installments_paid_count: isExistingBorrower ? paidCountNum : 0,
+        remaining_installments_count: isExistingBorrower ? remCountNum : effectiveTotalInstallments,
+        amount_already_collected: isExistingBorrower ? Number(amountAlreadyCollected) || 0 : 0,
+        installment_amount: finalInstallmentAmount,
+        start_date: startDate,
       });
-      resetForm();
+
       setOpen(false);
+      resetForm();
       onSuccess(collectionDay);
     } catch (err: any) {
-      setError(err.message || "Failed to create customer.");
+      setError(err.message || "Failed to add borrower.");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      setOpen(v);
-      if (!v) resetForm();
-    }}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <UserPlus className="size-4 mr-1" /> Add Customer
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="size-5 text-primary" /> Register Borrower & Issue Loan
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+            <UserPlus className="size-5 text-primary" /> Add New Borrower Profile
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Enter borrower details and loan parameters to register a new customer in your workspace.
+            Onboard a borrower to your collection route.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleCreate} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           {error && (
             <div className="p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
               {error}
             </div>
           )}
 
-          {/* 1. Borrower Status Choice */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Borrower Category</label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg border border-border">
-              <button
-                type="button"
-                className={`py-2 px-3 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 transition-all ${!isExistingBorrower ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                onClick={() => setIsExistingBorrower(false)}
-              >
-                <UserCheck className="size-3.5 text-emerald-600" /> New Borrower (Fresh Loan)
-              </button>
-              <button
-                type="button"
-                className={`py-2 px-3 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5 transition-all ${isExistingBorrower ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                onClick={() => setIsExistingBorrower(true)}
-              >
-                <Sparkles className="size-3.5" /> Existing Borrower (Ongoing Loan)
-              </button>
-            </div>
+          {/* Mode Switcher */}
+          <div className="p-1 bg-muted/60 rounded-xl flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setIsExistingBorrower(false)}
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                !isExistingBorrower ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Fresh Disbursed Loan
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsExistingBorrower(true)}
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 ${
+                isExistingBorrower ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="size-3.5" /> Ongoing Loan (Cutover)
+            </button>
           </div>
 
           {/* Borrower Personal Details */}
@@ -1301,10 +1263,11 @@ function NewCustomerModal({
             <div>
               <label className="text-xs font-medium">Seq No. / ID</label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="mt-1 font-mono font-bold"
                 value={sequenceNumber}
-                onChange={(e) => setSequenceNumber(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => setSequenceNumber(e.target.value)}
                 placeholder="e.g. 1"
               />
             </div>
@@ -1320,7 +1283,6 @@ function NewCustomerModal({
                 onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 required
                 placeholder="9876543210"
-                maxLength={10}
               />
             </div>
           </div>
@@ -1329,18 +1291,42 @@ function NewCustomerModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium">Principal Amount (₹) *</label>
-              <Input type="number" className="mt-1" value={loanAmount} onChange={(e) => setLoanAmount(Number(e.target.value))} required />
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs"
+                value={loanAmount}
+                onChange={(e) => setLoanAmount(e.target.value)}
+                placeholder="50000"
+                required
+              />
             </div>
             <div>
               <label className="text-xs font-medium">Disbursed Amount (₹) *</label>
-              <Input type="number" className="mt-1" value={disbursedAmount} onChange={(e) => setDisbursedAmount(Number(e.target.value))} required />
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs"
+                value={disbursedAmount}
+                onChange={(e) => setDisbursedAmount(e.target.value)}
+                placeholder="48000"
+                required
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium">Interest Rate (%) *</label>
-              <Input type="number" className="mt-1" value={interestRate} onChange={(e) => setInterestRate(Number(e.target.value))} required />
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value)}
+                placeholder="20"
+                required
+              />
             </div>
             <div>
               <label className="text-xs font-medium">Start Date *</label>
@@ -1354,67 +1340,56 @@ function NewCustomerModal({
               <div>
                 <label className="text-xs font-medium">Collection Line (Route)</label>
                 <Select value={selectedLineId} onValueChange={setSelectedLineId}>
-                  <SelectTrigger className="mt-1 font-medium"><SelectValue placeholder="Select Route Line" /></SelectTrigger>
+                  <SelectTrigger className="mt-1 text-xs"><SelectValue placeholder="General (No Line)" /></SelectTrigger>
                   <SelectContent>
                     {lines.map((ln) => (
-                      <SelectItem key={ln.public_id} value={ln.public_id}>
-                        {ln.name} {ln.area ? `(${ln.area})` : ""}
+                      <SelectItem key={ln.public_id} value={ln.public_id} className="text-xs font-medium">
+                        📍 {ln.name} ({ln.day_schedules?.length || 0} days)
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
-                <label className="text-xs font-medium">Day Time Slot Portion</label>
-                <Select value={selectedPortion} onValueChange={(v) => setSelectedPortion(v as any)}>
-                  <SelectTrigger className="mt-1 font-medium"><SelectValue /></SelectTrigger>
+                <label className="text-xs font-medium">Time Slot / Session</label>
+                <Select value={selectedPortion} onValueChange={(val) => setSelectedPortion(val as any)}>
+                  <SelectTrigger className="mt-1 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(() => {
-                      const sched = selectedLineObj?.day_schedules?.find(
-                        (s) => s.day_of_week.toLowerCase() === collectionDay.toLowerCase()
-                      );
-                      const confPortion = sched?.portion || "both";
-                      if (confPortion === "morning") {
-                        return <SelectItem value="morning">🌅 Morning Only (1am–1pm)</SelectItem>;
-                      }
-                      if (confPortion === "afternoon") {
-                        return <SelectItem value="afternoon">🌆 Afternoon Only (1pm–12am)</SelectItem>;
-                      }
-                      return (
-                        <>
-                          <SelectItem value="morning">🌅 Morning (1am–1pm)</SelectItem>
-                          <SelectItem value="afternoon">🌆 Afternoon (1pm–12am)</SelectItem>
-                          <SelectItem value="both">☀️ Full Day</SelectItem>
-                        </>
-                      );
-                    })()}
+                    <SelectItem value="both" className="text-xs">☀️ Full Day</SelectItem>
+                    <SelectItem value="morning" className="text-xs">🌅 Morning Session</SelectItem>
+                    <SelectItem value="afternoon" className="text-xs">🌆 Afternoon Session</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
           )}
 
+          {/* Collection Day */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium">Assigned Collection Day *</label>
+              <label className="text-xs font-medium">Collection Day *</label>
               <Select value={collectionDay} onValueChange={setCollectionDay}>
                 <SelectTrigger className="mt-1 font-semibold text-primary"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {allowedDaysForSelectedLine.map((dayObj) => (
-                    <SelectItem key={dayObj.key} value={dayObj.key} className="capitalize font-medium">
-                      {dayObj.label}
+                  {allowedDaysForSelectedLine.map((dObj) => (
+                    <SelectItem key={dObj.key} value={dObj.key} className="capitalize font-medium">
+                      {dObj.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div>
-              <label className="text-xs font-medium">Collection Frequency</label>
-              <Select value={selectedFreq.toString()} onValueChange={(v) => setSelectedFreq(Number(v))}>
+              <label className="text-xs font-medium">Collection Frequency *</label>
+              <Select value={String(selectedFreq)} onValueChange={(val) => setSelectedFreq(Number(val))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {frequencies.map((f) => (
-                    <SelectItem key={f.id} value={f.id.toString()}>{f.name}</SelectItem>
+                    <SelectItem key={f.id} value={String(f.id)}>
+                      {f.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1426,10 +1401,11 @@ function NewCustomerModal({
             <div>
               <label className="text-xs font-semibold">Total Number of Installments *</label>
               <Input
-                type="number"
-                className="mt-1 font-mono"
+                type="text"
+                inputMode="numeric"
+                className="mt-1 font-mono text-xs"
                 value={totalInstallmentsInput}
-                onChange={(e) => setTotalInstallmentsInput(Number(e.target.value))}
+                onChange={(e) => setTotalInstallmentsInput(e.target.value)}
                 placeholder="e.g. 100 installments"
                 required
               />
@@ -1446,10 +1422,11 @@ function NewCustomerModal({
                 <div>
                   <label className="text-[11px] font-semibold">Paid Count *</label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     className="mt-1 h-8 text-xs font-mono"
                     value={installmentsPaidCount}
-                    onChange={(e) => setInstallmentsPaidCount(Number(e.target.value))}
+                    onChange={(e) => setInstallmentsPaidCount(e.target.value)}
                     placeholder="e.g. 20"
                     required
                   />
@@ -1457,10 +1434,11 @@ function NewCustomerModal({
                 <div>
                   <label className="text-[11px] font-semibold">Remaining Count *</label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     className="mt-1 h-8 text-xs font-mono"
                     value={remainingInstallmentsCount}
-                    onChange={(e) => setRemainingInstallmentsCount(Number(e.target.value))}
+                    onChange={(e) => setRemainingInstallmentsCount(e.target.value)}
                     placeholder="e.g. 80"
                     required
                   />
@@ -1468,10 +1446,11 @@ function NewCustomerModal({
                 <div>
                   <label className="text-[11px] font-semibold">Already Collected (₹) *</label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     className="mt-1 h-8 text-xs font-mono"
                     value={amountAlreadyCollected}
-                    onChange={(e) => setAmountAlreadyCollected(Number(e.target.value))}
+                    onChange={(e) => setAmountAlreadyCollected(e.target.value)}
                     placeholder="e.g. 12000"
                     required
                   />
@@ -1507,9 +1486,8 @@ function NewCustomerModal({
               </div>
             </div>
             <Input
-              type="number"
-              step="any"
-              min="0.01"
+              type="text"
+              inputMode="decimal"
               className="font-mono font-bold text-primary h-9 text-xs sm:text-sm"
               value={customInstallmentAmount}
               onChange={(e) => {
@@ -1578,19 +1556,20 @@ function EditCustomerModal({
     ? lineScheduleDays[0]
     : currentDay || baseDays[0] || "monday";
 
-  const [sequenceNumber, setSequenceNumber] = useState<number | "">(customer.sequence_number ?? "");
+  const [sequenceNumber, setSequenceNumber] = useState<string>(customer.sequence_number != null ? String(customer.sequence_number) : "");
   const [fullName, setFullName] = useState(customer.full_name || "");
   const [mobileNumber, setMobileNumber] = useState((customer.mobile_number || "").replace(/^\+91/, ""));
-  const [loanAmount, setLoanAmount] = useState(customer.loan_amount || 0);
-  const [disbursedAmount, setDisbursedAmount] = useState(customer.disbursed_amount || 0);
-  const [interestRate, setInterestRate] = useState(customer.interest_rate || 0);
+  const [loanAmount, setLoanAmount] = useState<string>(customer.loan_amount != null ? String(customer.loan_amount) : "");
+  const [disbursedAmount, setDisbursedAmount] = useState<string>(customer.disbursed_amount != null ? String(customer.disbursed_amount) : "");
+  const [interestRate, setInterestRate] = useState<string>(customer.interest_rate != null ? String(customer.interest_rate) : "");
+  const [startDate, setStartDate] = useState(customer.start_date || new Date().toISOString().slice(0, 10));
   const [collectionDay, setCollectionDay] = useState(initialDay);
   const [status, setStatus] = useState(customer.status || "active");
 
-  const [installmentsPaidCount, setInstallmentsPaidCount] = useState(customer.installments_paid_count || 0);
-  const [remainingInstallmentsCount, setRemainingInstallmentsCount] = useState(customer.remaining_installments_count || 1);
-  const [amountAlreadyCollected, setAmountAlreadyCollected] = useState(customer.amount_already_collected || 0);
-  const [installmentAmount, setInstallmentAmount] = useState(customer.installment_amount || 0);
+  const [installmentsPaidCount, setInstallmentsPaidCount] = useState<string>(customer.installments_paid_count != null ? String(customer.installments_paid_count) : "0");
+  const [remainingInstallmentsCount, setRemainingInstallmentsCount] = useState<string>(customer.remaining_installments_count != null ? String(customer.remaining_installments_count) : "1");
+  const [amountAlreadyCollected, setAmountAlreadyCollected] = useState<string>(customer.amount_already_collected != null ? String(customer.amount_already_collected) : "0");
+  const [installmentAmount, setInstallmentAmount] = useState<string>(customer.installment_amount != null ? String(customer.installment_amount) : "");
   const [notes, setNotes] = useState(customer.notes || "");
 
   const [submitting, setSubmitting] = useState(false);
@@ -1602,23 +1581,26 @@ function EditCustomerModal({
     setError(null);
 
     const fullMobile = mobileNumber.startsWith("+91") ? mobileNumber : `+91${mobileNumber.replace(/^\+91/, "").trim()}`;
-    const totalInstallments = installmentsPaidCount + remainingInstallmentsCount;
+    const paidNum = Number(installmentsPaidCount) || 0;
+    const remNum = Number(remainingInstallmentsCount) || 0;
+    const totalInstallments = paidNum + remNum;
 
     try {
       await guestWorkspaceService.updateCustomer(customer.public_id, {
-        sequence_number: sequenceNumber !== "" ? Number(sequenceNumber) : null,
+        sequence_number: sequenceNumber.trim() !== "" ? Number(sequenceNumber) : null,
         full_name: fullName,
         mobile_number: fullMobile,
-        loan_amount: loanAmount,
-        disbursed_amount: disbursedAmount,
-        interest_rate: interestRate,
+        loan_amount: Number(loanAmount) || 0,
+        disbursed_amount: Number(disbursedAmount) || 0,
+        interest_rate: Number(interestRate) || 0,
+        start_date: startDate,
         collection_day: collectionDay,
         status: status,
         total_installments: totalInstallments,
-        installments_paid_count: installmentsPaidCount,
-        remaining_installments_count: remainingInstallmentsCount,
-        amount_already_collected: amountAlreadyCollected,
-        installment_amount: installmentAmount,
+        installments_paid_count: paidNum,
+        remaining_installments_count: remNum,
+        amount_already_collected: Number(amountAlreadyCollected) || 0,
+        installment_amount: Number(installmentAmount) || 0,
         notes: notes,
       });
       setOpen(false);
@@ -1632,47 +1614,77 @@ function EditCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
             <Edit3 className="size-5 text-primary" /> Edit Customer & Loan Profile
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleUpdate} className="space-y-4 pt-2">
+        <form onSubmit={handleUpdate} className="space-y-3.5 pt-2">
           {error && (
             <div className="p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
               {error}
             </div>
           )}
 
-          {/* Borrower Personal Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Row 1: Full Name & Mobile Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium">Seq No. / ID</label>
+              <label className="text-xs font-semibold text-foreground">Borrower Full Name *</label>
+              <Input className="mt-1 text-xs" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-foreground">Mobile Number *</label>
+              <PhoneInput className="mt-1 text-xs" value={mobileNumber.replace(/^\+91/, "")} onChange={(e) => setMobileNumber(e.target.value)} required />
+            </div>
+          </div>
+
+          {/* Row 2: Seq No. & Loan Status */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-foreground">Seq No. / Token ID</label>
               <Input
-                type="number"
-                className="mt-1 font-mono font-bold"
+                type="text"
+                inputMode="numeric"
+                className="mt-1 font-mono font-bold text-xs"
                 value={sequenceNumber}
-                onChange={(e) => setSequenceNumber(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => setSequenceNumber(e.target.value)}
                 placeholder="e.g. 1"
               />
             </div>
             <div>
-              <label className="text-xs font-medium">Borrower Full Name *</label>
-              <Input className="mt-1" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-xs font-medium">Mobile Number *</label>
-              <PhoneInput className="mt-1" value={mobileNumber.replace(/^\+91/, "")} onChange={(e) => setMobileNumber(e.target.value)} required />
+              <label className="text-xs font-semibold text-foreground">Loan Status *</label>
+              <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+                <SelectTrigger className="mt-1 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="closed">Closed / Settled</SelectItem>
+                  <SelectItem value="defaulted">Defaulted</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
+          {/* Row 3: Disbursed Date & Assigned Day */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium">Assigned Collection Day *</label>
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                <Calendar className="size-3.5 text-primary shrink-0" /> Disbursed Date *
+              </label>
+              <Input
+                type="date"
+                className="mt-1 text-xs font-semibold"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground">Assigned Collection Day *</label>
               <Select value={collectionDay} onValueChange={setCollectionDay}>
-                <SelectTrigger className="mt-1 font-semibold text-primary"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 text-xs font-semibold text-primary"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {availableDays.map((dKey) => {
                     const dayObj = ALL_DAYS_LIST.find((d) => d.key === dKey);
@@ -1685,59 +1697,108 @@ function EditCustomerModal({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Row 4: Principal & Disbursed Amounts */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium">Loan Status *</label>
-              <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="closed">Closed / Settled</SelectItem>
-                  <SelectItem value="defaulted">Defaulted</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-xs font-semibold text-foreground">Principal Amount (₹) *</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs font-semibold"
+                value={loanAmount}
+                onChange={(e) => setLoanAmount(e.target.value)}
+                placeholder="10000"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-foreground">Disbursed Amount (₹) *</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs font-semibold"
+                value={disbursedAmount}
+                onChange={(e) => setDisbursedAmount(e.target.value)}
+                placeholder="10000"
+                required
+              />
             </div>
           </div>
 
-          {/* Financial Amounts */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Row 5: Interest Rate & Per Installment Amount */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium">Principal (₹) *</label>
-              <Input type="number" className="mt-1 text-xs" value={loanAmount} onChange={(e) => setLoanAmount(Number(e.target.value))} required />
+              <label className="text-xs font-semibold text-foreground">Interest Rate (%) *</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs font-semibold"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value)}
+                placeholder="20"
+                required
+              />
             </div>
             <div>
-              <label className="text-xs font-medium">Disbursed (₹) *</label>
-              <Input type="number" className="mt-1 text-xs" value={disbursedAmount} onChange={(e) => setDisbursedAmount(Number(e.target.value))} required />
-            </div>
-            <div>
-              <label className="text-xs font-medium">Interest (%) *</label>
-              <Input type="number" className="mt-1 text-xs" value={interestRate} onChange={(e) => setInterestRate(Number(e.target.value))} required />
+              <label className="text-xs font-semibold text-foreground">Per Installment (₹) *</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 text-xs font-bold text-primary font-mono"
+                value={installmentAmount}
+                onChange={(e) => setInstallmentAmount(e.target.value)}
+                placeholder="600"
+                required
+              />
             </div>
           </div>
 
-          {/* Installments & Collections */}
-          <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-3">
+          {/* Row 6: Progress & Collection Counters Box */}
+          <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-2.5">
             <div className="text-xs font-bold text-foreground flex items-center justify-between">
               <span>Installment & Progress Counters</span>
-              <span className="font-mono text-[11px] text-muted-foreground">Total: {installmentsPaidCount + remainingInstallmentsCount} Installments</span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                Total: {(Number(installmentsPaidCount) || 0) + (Number(remainingInstallmentsCount) || 0)} Inst.
+              </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-medium">Paid Count</label>
-                <Input type="number" className="mt-1 h-8 text-xs font-mono" value={installmentsPaidCount} onChange={(e) => setInstallmentsPaidCount(Number(e.target.value))} />
+                <label className="text-[11px] font-semibold text-muted-foreground">Paid Count</label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="mt-1 h-8 text-xs font-mono font-semibold"
+                  value={installmentsPaidCount}
+                  onChange={(e) => setInstallmentsPaidCount(e.target.value)}
+                  placeholder="0"
+                />
               </div>
               <div>
-                <label className="text-[11px] font-medium">Remaining Count</label>
-                <Input type="number" className="mt-1 h-8 text-xs font-mono" value={remainingInstallmentsCount} onChange={(e) => setRemainingInstallmentsCount(Number(e.target.value))} />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium">Collected (₹)</label>
-                <Input type="number" className="mt-1 h-8 text-xs font-mono" value={amountAlreadyCollected} onChange={(e) => setAmountAlreadyCollected(Number(e.target.value))} />
+                <label className="text-[11px] font-semibold text-muted-foreground">Remaining Count</label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="mt-1 h-8 text-xs font-mono font-semibold"
+                  value={remainingInstallmentsCount}
+                  onChange={(e) => setRemainingInstallmentsCount(e.target.value)}
+                  placeholder="20"
+                />
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold">Estimated Per Installment Amount (₹) *</label>
-              <Input type="number" step="any" min="0.01" className="mt-1 h-9 font-mono font-bold text-primary text-xs" value={installmentAmount} onChange={(e) => setInstallmentAmount(e.target.value ? Number(e.target.value) : 0)} required />
+              <label className="text-[11px] font-semibold text-muted-foreground">Amount Already Collected (₹)</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className="mt-1 h-8 text-xs font-mono font-semibold"
+                value={amountAlreadyCollected}
+                onChange={(e) => setAmountAlreadyCollected(e.target.value)}
+                placeholder="0"
+              />
             </div>
           </div>
 
@@ -1746,20 +1807,21 @@ function EditCustomerModal({
             <Input className="mt-1 text-xs" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add any custom notes or loan history context" />
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2">
             <Button
               type="button"
               variant="destructive"
               size="sm"
               onClick={() => onDeleteRequest(customer)}
+              className="w-full sm:w-auto"
             >
               <Trash2 className="size-4 mr-1" /> Delete Customer
             </Button>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1 sm:flex-none">
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
+              <Button type="submit" disabled={submitting} className="flex-1 sm:flex-none font-bold">
                 {submitting ? "Saving..." : "Save Customer Changes"}
               </Button>
             </div>

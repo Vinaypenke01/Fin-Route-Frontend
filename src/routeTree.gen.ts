@@ -58,6 +58,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
+import { Route as AppMigrationRouteImport } from './routes/app.migration'
 import { Route as AppExpensesRouteImport } from './routes/app.expenses'
 import { Route as AppCustomersRouteImport } from './routes/app.customers'
 import { Route as AppCalculatorRouteImport } from './routes/app.calculator'
@@ -344,6 +345,11 @@ const AppNotificationsRoute = AppNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMigrationRoute = AppMigrationRouteImport.update({
+  id: '/migration',
+  path: '/migration',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppExpensesRoute = AppExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
@@ -583,6 +589,7 @@ export interface FileRoutesByFullPath {
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/expenses': typeof AppExpensesRoute
+  '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/reports': typeof AppReportsRoute
@@ -670,6 +677,7 @@ export interface FileRoutesByTo {
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/expenses': typeof AppExpensesRoute
+  '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/reports': typeof AppReportsRoute
@@ -762,6 +770,7 @@ export interface FileRoutesById {
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/expenses': typeof AppExpensesRoute
+  '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/reports': typeof AppReportsRoute
@@ -855,6 +864,7 @@ export interface FileRouteTypes {
     | '/app/calculator'
     | '/app/customers'
     | '/app/expenses'
+    | '/app/migration'
     | '/app/notifications'
     | '/app/profile'
     | '/app/reports'
@@ -942,6 +952,7 @@ export interface FileRouteTypes {
     | '/app/calculator'
     | '/app/customers'
     | '/app/expenses'
+    | '/app/migration'
     | '/app/notifications'
     | '/app/profile'
     | '/app/reports'
@@ -1033,6 +1044,7 @@ export interface FileRouteTypes {
     | '/app/calculator'
     | '/app/customers'
     | '/app/expenses'
+    | '/app/migration'
     | '/app/notifications'
     | '/app/profile'
     | '/app/reports'
@@ -1455,6 +1467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotificationsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/migration': {
+      id: '/app/migration'
+      path: '/migration'
+      fullPath: '/app/migration'
+      preLoaderRoute: typeof AppMigrationRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/expenses': {
       id: '/app/expenses'
       path: '/expenses'
@@ -1794,6 +1813,7 @@ interface AppRouteChildren {
   AppCalculatorRoute: typeof AppCalculatorRoute
   AppCustomersRoute: typeof AppCustomersRoute
   AppExpensesRoute: typeof AppExpensesRoute
+  AppMigrationRoute: typeof AppMigrationRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -1811,6 +1831,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCalculatorRoute: AppCalculatorRoute,
   AppCustomersRoute: AppCustomersRoute,
   AppExpensesRoute: AppExpensesRoute,
+  AppMigrationRoute: AppMigrationRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppProfileRoute: AppProfileRoute,
   AppReportsRoute: AppReportsRoute,

@@ -1808,8 +1808,8 @@ function MarkAsPaidModal({
   const defaultAmount = customer.installment_amount || customer.loan_amount || 0;
 
   const [collectionDate, setCollectionDate] = useState<string>(initialCollectionDate || today);
-  const [expectedAmount, setExpectedAmount] = useState<number>(defaultAmount);
-  const [collectedAmount, setCollectedAmount] = useState<number>(defaultAmount);
+  const [expectedAmount, setExpectedAmount] = useState<string>(defaultAmount ? String(defaultAmount) : "");
+  const [collectedAmount, setCollectedAmount] = useState<string>(defaultAmount ? String(defaultAmount) : "");
   const [paymentModes, setPaymentModes] = useState<MasterItem[]>([]);
   const [statuses, setStatuses] = useState<MasterItem[]>([]);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<number>(1);
@@ -1837,8 +1837,10 @@ function MarkAsPaidModal({
     if (open) {
       loadMasters();
       setCollectionDate(initialCollectionDate || today);
+      setExpectedAmount(defaultAmount ? String(defaultAmount) : "");
+      setCollectedAmount(defaultAmount ? String(defaultAmount) : "");
     }
-  }, [open, initialCollectionDate]);
+  }, [open, initialCollectionDate, defaultAmount]);
 
   const currentStatusObj = statuses.find((s) => s.id === selectedStatus);
   const isSkippedSelected = currentStatusObj?.code === "skipped" || currentStatusObj?.name?.toLowerCase().includes("skipped");
@@ -1852,8 +1854,8 @@ function MarkAsPaidModal({
       await guestWorkspaceService.recordCollection({
         customer: customer.public_id,
         collection_date: collectionDate,
-        expected_amount: expectedAmount,
-        collected_amount: isSkippedSelected ? 0 : collectedAmount,
+        expected_amount: Number(expectedAmount) || 0,
+        collected_amount: isSkippedSelected ? 0 : Number(collectedAmount) || 0,
         status: selectedStatus,
         payment_mode: isSkippedSelected ? undefined : selectedPaymentMode,
         remarks,
@@ -1922,10 +1924,11 @@ function MarkAsPaidModal({
             <div>
               <Label className="text-xs font-semibold">Expected Installment (₹) *</Label>
               <Input
-                type="number"
-                className="mt-1 font-mono font-semibold"
+                type="text"
+                inputMode="decimal"
+                className="mt-1 font-mono font-semibold text-xs"
                 value={expectedAmount}
-                onChange={(e) => setExpectedAmount(Number(e.target.value))}
+                onChange={(e) => setExpectedAmount(e.target.value)}
                 required
               />
             </div>
@@ -1935,10 +1938,11 @@ function MarkAsPaidModal({
             <div>
               <Label className="text-xs font-semibold">Collected Amount (₹) *</Label>
               <Input
-                type="number"
-                className={`mt-1 font-mono font-bold ${isSkippedSelected ? "text-amber-600 bg-muted/40" : "text-emerald-700"}`}
+                type="text"
+                inputMode="decimal"
+                className={`mt-1 font-mono font-bold text-xs ${isSkippedSelected ? "text-amber-600 bg-muted/40" : "text-emerald-700"}`}
                 value={collectedAmount}
-                onChange={(e) => setCollectedAmount(Number(e.target.value))}
+                onChange={(e) => setCollectedAmount(e.target.value)}
                 disabled={isSkippedSelected}
                 required
               />
@@ -1953,7 +1957,7 @@ function MarkAsPaidModal({
                   const st = statuses.find((s) => s.id === statusId);
                   const isSkip = st?.code === "skipped" || st?.name?.toLowerCase().includes("skipped");
                   if (isSkip) {
-                    setCollectedAmount(0);
+                    setCollectedAmount("0");
                   } else {
                     setCollectedAmount(expectedAmount);
                   }

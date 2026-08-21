@@ -15,6 +15,8 @@ import {
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { CollectionDaysSetup } from "@/components/collection-days-setup";
+import { MigrationOnboardingWizardModal } from "@/components/migration-onboarding-modal";
+import { Sparkles } from "lucide-react";
 import { guestWorkspaceService, DashboardMetrics, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -42,6 +44,7 @@ function KpiCard({ icon: Icon, label, value, sub, className }: any) {
 
 function DashboardPage() {
   const { user, workspace } = useAuth();
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
   const getTodayStr = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -416,6 +419,11 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="gap-1.5 font-bold border-amber-500/40 text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20">
+            <Link to="/app/migration">
+              <Sparkles className="size-4 text-amber-500" /> Digital Migration / Bulk Import
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link to="/app/collections">
               <Plus className="size-4" /> Record Collection
@@ -428,6 +436,13 @@ function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      <MigrationOnboardingWizardModal
+        open={isMigrationModalOpen}
+        onOpenChange={setIsMigrationModalOpen}
+        lines={lines}
+        onSuccess={() => loadDashboard()}
+      />
 
       <CollectionDaysSetup />
 

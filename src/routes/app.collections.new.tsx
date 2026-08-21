@@ -45,8 +45,8 @@ function NewCollectionPage() {
   const [statuses, setStatuses] = useState<MasterItem[]>([]);
   
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [collectedAmount, setCollectedAmount] = useState<number>(0);
-  const [expectedAmount, setExpectedAmount] = useState<number>(0);
+  const [collectedAmount, setCollectedAmount] = useState<string>("0");
+  const [expectedAmount, setExpectedAmount] = useState<string>("0");
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<number>(1);
   const [selectedStatus, setSelectedStatus] = useState<number>(1);
   const [collectionDate, setCollectionDate] = useState<string>(today);
@@ -92,12 +92,12 @@ function NewCollectionPage() {
       if (custs[0]) {
         setSelectedCustomerId(custs[0].public_id);
         const exp = custs[0].installment_amount || custs[0].loan_amount || 0;
-        setExpectedAmount(exp);
-        setCollectedAmount(exp);
+        setExpectedAmount(exp ? String(exp) : "");
+        setCollectedAmount(exp ? String(exp) : "");
       } else {
         setSelectedCustomerId("");
-        setExpectedAmount(0);
-        setCollectedAmount(0);
+        setExpectedAmount("0");
+        setCollectedAmount("0");
       }
     } catch (err) {
       console.error("Collection data load error:", err);
@@ -119,8 +119,8 @@ function NewCollectionPage() {
     const found = customers.find((c) => c.public_id === public_id);
     if (found) {
       const exp = found.installment_amount || found.loan_amount || 0;
-      setExpectedAmount(exp);
-      setCollectedAmount(exp);
+      setExpectedAmount(exp ? String(exp) : "");
+      setCollectedAmount(exp ? String(exp) : "");
     }
   };
 
@@ -133,7 +133,8 @@ function NewCollectionPage() {
       setError("Please select a borrower.");
       return;
     }
-    if (!isSkippedSelected && (collectedAmount === undefined || collectedAmount === null || Number(collectedAmount) <= 0)) {
+    const colNum = Number(collectedAmount) || 0;
+    if (!isSkippedSelected && colNum <= 0) {
       setError("Collected amount must be greater than ₹0 when recording a collection payment.");
       return;
     }
@@ -144,8 +145,8 @@ function NewCollectionPage() {
       await guestWorkspaceService.recordCollection({
         customer: selectedCustomerId,
         collection_date: collectionDate,
-        expected_amount: expectedAmount,
-        collected_amount: isSkippedSelected ? 0 : collectedAmount,
+        expected_amount: Number(expectedAmount) || 0,
+        collected_amount: isSkippedSelected ? 0 : colNum,
         status: selectedStatus,
         payment_mode: isSkippedSelected ? undefined : selectedPaymentMode,
         remarks,
@@ -309,10 +310,11 @@ function NewCollectionPage() {
             <div>
               <Label className="text-xs font-semibold">Expected Installment (₹) *</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className="mt-1 font-mono font-semibold"
                 value={expectedAmount}
-                onChange={(e) => setExpectedAmount(Number(e.target.value))}
+                onChange={(e) => setExpectedAmount(e.target.value)}
                 required
               />
             </div>
@@ -322,10 +324,11 @@ function NewCollectionPage() {
             <div>
               <Label className="text-xs font-semibold">Collected Amount (₹) *</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className={`mt-1 font-mono font-bold ${isSkippedSelected ? "text-amber-600 bg-muted/40" : "text-emerald-700"}`}
                 value={collectedAmount}
-                onChange={(e) => setCollectedAmount(Number(e.target.value))}
+                onChange={(e) => setCollectedAmount(e.target.value)}
                 disabled={isSkippedSelected}
                 required
               />
@@ -341,7 +344,7 @@ function NewCollectionPage() {
                   const st = statuses.find((s) => s.id === statusId);
                   const isSkip = st?.code === "skipped" || st?.name?.toLowerCase().includes("skipped");
                   if (isSkip) {
-                    setCollectedAmount(0);
+                    setCollectedAmount("0");
                   } else {
                     setCollectedAmount(expectedAmount);
                   }

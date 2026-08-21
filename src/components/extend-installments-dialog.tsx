@@ -32,14 +32,15 @@ export function ExtendInstallmentsDialog({
   installmentAmount = 0,
   onSuccess,
 }: ExtendInstallmentsDialogProps) {
-  const [addCount, setAddCount] = useState<number>(5);
+  const [addCount, setAddCount] = useState<string | number>(5);
   const [submitting, setSubmitting] = useState(false);
 
-  const newTotal = currentTotalInstallments + Number(addCount || 0);
+  const countNum = Number(addCount) || 0;
+  const newTotal = currentTotalInstallments + countNum;
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (addCount <= 0) {
+    if (countNum <= 0) {
       toast.error("Please enter at least 1 additional installment.");
       return;
     }
@@ -105,12 +106,11 @@ export function ExtendInstallmentsDialog({
           <div>
             <Label className="text-xs font-semibold">Additional Installment Count *</Label>
             <Input
-              type="number"
-              min={1}
-              max={200}
+              type="text"
+              inputMode="numeric"
               className="mt-1 font-mono text-sm font-bold"
-              value={addCount}
-              onChange={(e) => setAddCount(Math.max(1, Number(e.target.value)))}
+              value={addCount ?? ""}
+              onChange={(e) => setAddCount(e.target.value)}
               required
             />
           </div>

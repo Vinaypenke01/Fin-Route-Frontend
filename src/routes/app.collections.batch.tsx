@@ -43,7 +43,7 @@ function BatchPage() {
   const [statuses, setStatuses] = useState<MasterItem[]>([]);
   const [paymentModes, setPaymentModes] = useState<MasterItem[]>([]);
   const [collectionDate, setCollectionDate] = useState<string>(today);
-  const [batchData, setBatchData] = useState<Record<string, { collected: number; status: number; mode: number }>>({});
+  const [batchData, setBatchData] = useState<Record<string, { collected: number | string; status: number; mode: number }>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ function BatchPage() {
       setPaymentModes(modesRes);
       setStatuses(statusRes);
 
-      const initialMap: Record<string, { collected: number; status: number; mode: number }> = {};
+      const initialMap: Record<string, { collected: number | string; status: number; mode: number }> = {};
       custs.forEach((c) => {
         initialMap[c.public_id] = {
           collected: c.installment_amount || c.loan_amount || 0,
@@ -104,10 +104,10 @@ function BatchPage() {
     loadCustomersAndMasters();
   }, [selectedDay]);
 
-  const updateCollected = (public_id: string, amount: number) => {
+  const updateCollected = (public_id: string, val: string) => {
     setBatchData((prev) => ({
       ...prev,
-      [public_id]: { ...prev[public_id], collected: amount },
+      [public_id]: { ...prev[public_id], collected: val },
     }));
   };
 
@@ -119,7 +119,7 @@ function BatchPage() {
     const entries = customers.map((c) => ({
       customer: c.public_id,
       expected_amount: c.installment_amount || c.loan_amount || 0,
-      collected_amount: batchData[c.public_id]?.collected || 0,
+      collected_amount: Number(batchData[c.public_id]?.collected) || 0,
       status: batchData[c.public_id]?.status || 1,
       payment_mode: batchData[c.public_id]?.mode || 1,
     }));
@@ -299,11 +299,12 @@ function BatchPage() {
 
                         return (
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             className={`w-32 font-mono font-semibold h-8 text-xs ${isSkip ? "text-amber-600 bg-muted/40" : "text-emerald-700"}`}
-                            value={isSkip ? 0 : (batchData[c.public_id]?.collected ?? 0)}
+                            value={isSkip ? "0" : (batchData[c.public_id]?.collected ?? "")}
                             disabled={isSkip}
-                            onChange={(e) => updateCollected(c.public_id, Number(e.target.value))}
+                            onChange={(e) => updateCollected(c.public_id, e.target.value)}
                           />
                         );
                       })()}
