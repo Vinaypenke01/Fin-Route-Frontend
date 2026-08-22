@@ -19,6 +19,7 @@ import {
   HelpCircle,
   ChevronRight,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
 import {
   Sheet,
@@ -45,10 +46,10 @@ export function GuestMobileBottomNav() {
   };
 
   const mainTabs = [
+    { title: "Sheet", url: "/app/daily-sheet", icon: Layers },
     { title: "Dashboard", url: "/app", icon: LayoutDashboard, exact: true },
     { title: "Customers", url: "/app/customers", icon: Users },
     { title: "Collections", url: "/app/collections", icon: Wallet },
-    { title: "Expenses", url: "/app/expenses", icon: Receipt },
   ];
 
   const moreMenuItems = [

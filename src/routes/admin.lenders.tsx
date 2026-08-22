@@ -6,7 +6,7 @@ import { Input, PasswordInput, PhoneInput } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Search, Plus, UserPlus, MapPin, KeyRound, Edit, ShieldAlert } from "lucide-react";
 import { adminService, AdminWorkspace } from "@/lib/services/admin-service";
@@ -24,6 +24,7 @@ function LendersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<AdminWorkspace | null>(null);
+  const [grantingWorkspace, setGrantingWorkspace] = useState<AdminWorkspace | null>(null);
 
   const loadWorkspaces = async () => {
     setLoading(true);
@@ -166,6 +167,15 @@ function LendersPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right flex items-center justify-end gap-2">
+                    {w.subscription_plan !== "premium" && (
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                        onClick={() => setGrantingWorkspace(w)}
+                      >
+                        ⚡ Grant Access
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -192,6 +202,14 @@ function LendersPage() {
         <EditLenderModal
           workspace={editingWorkspace}
           onClose={() => setEditingWorkspace(null)}
+          onSuccess={loadWorkspaces}
+        />
+      )}
+
+      {grantingWorkspace && (
+        <GrantAccessDialogModal
+          workspace={grantingWorkspace}
+          onClose={() => setGrantingWorkspace(null)}
           onSuccess={loadWorkspaces}
         />
       )}
@@ -488,6 +506,101 @@ function EditLenderModal({ workspace, onClose, onSuccess }: { workspace: AdminWo
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Saving..." : "Save Workspace Changes"}
           </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GrantAccessDialogModal({
+  workspace,
+  onClose,
+  onSuccess,
+}: {
+  workspace: AdminWorkspace;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [duration, setDuration] = useState("30 Days (1 Month)");
+  const [allowedLines, setAllowedLines] = useState("Unlimited Lines");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGrant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await adminService.updateLender(workspace.public_id, {
+        subscription_plan: "premium",
+      });
+      alert(`🎉 Granted Premium Access (${duration}, ${allowedLines}) to '${workspace.name}'!`);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || "Failed to grant access.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold flex items-center gap-2 text-emerald-700">
+            ⚡ Grant Premium Access
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Confirm subscription plan activation for <strong>{workspace.name}</strong> ({workspace.owner_mobile}).
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleGrant} className="space-y-4 pt-2">
+          {error && <div className="p-2.5 bg-rose-500/10 text-rose-700 text-xs rounded-lg font-medium">{error}</div>}
+
+          <div>
+            <label className="text-xs font-bold">Configured Subscription Duration / Validity</label>
+            <Select value={duration} onValueChange={setDuration}>
+              <SelectTrigger className="mt-1 font-bold">
+                <SelectValue placeholder="Select Duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30 Days (1 Month)">30 Days (1 Month)</SelectItem>
+                <SelectItem value="90 Days (3 Months)">90 Days (3 Months)</SelectItem>
+                <SelectItem value="180 Days (6 Months)">180 Days (6 Months)</SelectItem>
+                <SelectItem value="365 Days (1 Year)">365 Days (1 Year)</SelectItem>
+                <SelectItem value="Lifetime Access">Lifetime Access</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Validity period for unlocking Customers, Collections, Expenses & Reports.</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold">Allowed Collection Lines Quota</label>
+            <Select value={allowedLines} onValueChange={setAllowedLines}>
+              <SelectTrigger className="mt-1 font-bold">
+                <SelectValue placeholder="Select Line Quota" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Unlimited Lines">Unlimited Lines</SelectItem>
+                <SelectItem value="5 Lines">5 Lines</SelectItem>
+                <SelectItem value="10 Lines">10 Lines</SelectItem>
+                <SelectItem value="20 Lines">20 Lines</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Route lines allowed for this lender.</p>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" disabled={submitting}>
+              {submitting ? "Granting..." : "⚡ Confirm & Grant Access"}
+            </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

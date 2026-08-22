@@ -13,6 +13,7 @@ import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Expense, Customer, Collection } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { TableSkeletonRows } from "@/components/ui/skeleton-loaders";
+import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 
 export const Route = createFileRoute("/app/expenses")({
   head: () => ({ meta: [{ title: "Expenses — FinRoute" }, { name: "description", content: "Track every rupee spent." }] }),
@@ -371,7 +372,8 @@ function ExpensesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <FeaturePaywallGuard module="expenses">
+      <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="p-4 bg-red-500/5 border-red-500/20">
           <p className="text-xs font-medium uppercase tracking-wide text-red-800">Operational Expenses ({formatDateLabel()})</p>
@@ -630,6 +632,7 @@ function ExpensesPage() {
         </div>
       </Card>
     </div>
+  </FeaturePaywallGuard>
   );
 }
 

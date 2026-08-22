@@ -19,6 +19,7 @@ import { DailyCashReconciliationCard } from "@/components/daily-cash-reconciliat
 import { LineSetupDialog } from "@/components/line-setup-dialog";
 import { DeleteLineDialog } from "@/components/delete-line-dialog";
 import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loaders";
+import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 
 export const Route = createFileRoute("/app/collections/")({
   head: () => ({ meta: [{ title: "Collections — FinRoute" }, { name: "description", content: "Digital collection register and route customer schedule." }] }),
@@ -774,7 +775,8 @@ function CollectionsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <FeaturePaywallGuard module="collections">
+      <div className="space-y-6">
       {/* 0. Daily Cash Flow & Reconciliation Card for Selected Line */}
       <DailyCashReconciliationCard
         date={selectedDate}
@@ -1789,6 +1791,7 @@ function CollectionsPage() {
         />
       )}
     </div>
+  </FeaturePaywallGuard>
   );
 }
 

@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Wallet, Calculator, Receipt, FileBarChart,
-  Bell, User, Settings, Sparkles, LogOut,
+  Bell, User, Settings, Sparkles, LogOut, Layers,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const nav = [
   { title: "Dashboard", url: "/app", icon: LayoutDashboard, exact: true, tour: "sidebar-dashboard" },
+  { title: "Daily Sheet", url: "/app/daily-sheet", icon: Layers, tour: "sidebar-daily-sheet" },
   { title: "Customers", url: "/app/customers", icon: Users, tour: "sidebar-customers" },
   { title: "Collections", url: "/app/collections", icon: Wallet, tour: "sidebar-collections" },
   { title: "Loan Calculator", url: "/app/calculator", icon: Calculator },

@@ -93,7 +93,9 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const cleanBase = API_BASE_URL.replace(/\/+$/, "");
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = endpoint.startsWith("http") ? endpoint : `${cleanBase}${cleanEndpoint}`;
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
@@ -130,7 +132,7 @@ export async function apiRequest<T = any>(
       isRefreshing = true;
 
       try {
-        const refreshResponse = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
+        const refreshResponse = await fetch(`${cleanBase}/auth/token/refresh/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refresh: refreshToken }),

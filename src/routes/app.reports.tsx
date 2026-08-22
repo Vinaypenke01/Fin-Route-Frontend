@@ -13,6 +13,7 @@ import { Search, Download, Calendar, IndianRupee, Wallet, ArrowDownRight, ArrowU
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
 import { downloadFinancialReportImage } from "@/lib/download-report-image";
+import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 
 export const Route = createFileRoute("/app/reports")({
   head: () => ({ meta: [{ title: "Reports & Financial Summary — FinRoute" }, { name: "description", content: "Daily, day-wise, and net financial collection & expense reports." }] }),
@@ -616,7 +617,8 @@ function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <FeaturePaywallGuard module="reports">
+      <div className="space-y-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -1317,6 +1319,7 @@ function ReportsPage() {
         customers={customers}
       />
     </div>
+  </FeaturePaywallGuard>
   );
 }
 

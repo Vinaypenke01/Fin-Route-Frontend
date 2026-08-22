@@ -75,26 +75,13 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
     }
   };
 
-  const isFreePlan = workspace?.subscription_plan === "free" || (workspace?.max_allowed_collection_days || 1) === 1;
-  const maxAllowedDays = workspace?.max_allowed_collection_days || (isFreePlan ? 1 : 7);
+  const isFreePlan = workspace?.subscription_plan === "free";
+  const savedMaxFreeStr = localStorage.getItem("finroute_admin_max_free_lines") || "3";
+  const savedMaxFree = parseInt(savedMaxFreeStr.replace(/\D/g, "") || "3", 10) || 3;
+  const maxAllowedLines = isFreePlan ? (workspace?.max_allowed_collection_days ? Math.min(workspace.max_allowed_collection_days, savedMaxFree) : savedMaxFree) : 999;
 
-  // Calculate used sessions across other lines
-  const otherLines = existingLines.filter((l) => !lineToEdit || l.public_id !== lineToEdit.public_id);
-  let usedSessionsCount = 0;
-  const usedDaysSet = new Set<string>();
-
-  otherLines.forEach((l) => {
-    l.day_schedules?.forEach((s) => {
-      usedDaysSet.add(s.day_of_week.toLowerCase());
-      if (s.portion === "both") {
-        usedSessionsCount += 2;
-      } else {
-        usedSessionsCount += 1;
-      }
-    });
-  });
-
-  const isPlanExhausted = isFreePlan && (usedSessionsCount >= 2 || usedDaysSet.size >= maxAllowedDays);
+  // Plan is exhausted ONLY if user tries to add a NEW line beyond their allowed line quota (e.g. 2 or 3 lines)
+  const isPlanExhausted = isFreePlan && !lineToEdit && existingLines.length >= maxAllowedLines;
 
   const handleToggleDayPortion = (day: string, portion: "morning" | "afternoon" | "both") => {
     setSelectedSchedules((prev) => {
@@ -229,14 +216,14 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
               /* Upgrade Banner for Free Plan Users who exhausted their days/sessions */
               <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-3 text-center my-2">
                 <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
-                  <Sparkles className="size-4 text-amber-600" /> Plan Collection Days Limit Reached
+                  <Sparkles className="size-4 text-amber-600" /> Plan Route Line Limit Reached
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
-                  Your <b>Free Plan</b> permits operating on a maximum of <b>1 Collection Day (2 Half-Day Sessions) per week</b> across all routes. You have used all available collection days & sessions on your existing configured lines.
+                  Your <b>Free Plan</b> permits operating on a maximum of <b>{savedMaxFree} Route Lines</b>. You have reached your free route line quota.
                 </p>
                 <Button asChild size="sm" className="text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs">
                   <Link to="/app/upgrade">
-                    <Sparkles className="size-3.5" /> Upgrade Plan to Unlock More Days
+                    <Sparkles className="size-3.5" /> Upgrade Plan to Unlock More Lines
                   </Link>
                 </Button>
               </div>

@@ -60,6 +60,7 @@ import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
 import { Route as AppMigrationRouteImport } from './routes/app.migration'
 import { Route as AppExpensesRouteImport } from './routes/app.expenses'
+import { Route as AppDailySheetRouteImport } from './routes/app.daily-sheet'
 import { Route as AppCustomersRouteImport } from './routes/app.customers'
 import { Route as AppCalculatorRouteImport } from './routes/app.calculator'
 import { Route as AdminUpgradeRequestsRouteImport } from './routes/admin.upgrade-requests'
@@ -68,6 +69,7 @@ import { Route as AdminSubscriptionsRouteImport } from './routes/admin.subscript
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
+import { Route as AdminRatesRouteImport } from './routes/admin.rates'
 import { Route as AdminProfileRouteImport } from './routes/admin.profile'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminMasterDataRouteImport } from './routes/admin.master-data'
@@ -355,6 +357,11 @@ const AppExpensesRoute = AppExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDailySheetRoute = AppDailySheetRouteImport.update({
+  id: '/daily-sheet',
+  path: '/daily-sheet',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCustomersRoute = AppCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -393,6 +400,11 @@ const AdminReviewsRoute = AdminReviewsRouteImport.update({
 const AdminReportsRoute = AdminReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRatesRoute = AdminRatesRouteImport.update({
+  id: '/rates',
+  path: '/rates',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProfileRoute = AdminProfileRouteImport.update({
@@ -580,6 +592,7 @@ export interface FileRoutesByFullPath {
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/profile': typeof AdminProfileRoute
+  '/admin/rates': typeof AdminRatesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -588,6 +601,7 @@ export interface FileRoutesByFullPath {
   '/admin/upgrade-requests': typeof AdminUpgradeRequestsRoute
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
+  '/app/daily-sheet': typeof AppDailySheetRoute
   '/app/expenses': typeof AppExpensesRoute
   '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
@@ -668,6 +682,7 @@ export interface FileRoutesByTo {
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/profile': typeof AdminProfileRoute
+  '/admin/rates': typeof AdminRatesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -676,6 +691,7 @@ export interface FileRoutesByTo {
   '/admin/upgrade-requests': typeof AdminUpgradeRequestsRoute
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
+  '/app/daily-sheet': typeof AppDailySheetRoute
   '/app/expenses': typeof AppExpensesRoute
   '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
@@ -761,6 +777,7 @@ export interface FileRoutesById {
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/profile': typeof AdminProfileRoute
+  '/admin/rates': typeof AdminRatesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -769,6 +786,7 @@ export interface FileRoutesById {
   '/admin/upgrade-requests': typeof AdminUpgradeRequestsRoute
   '/app/calculator': typeof AppCalculatorRoute
   '/app/customers': typeof AppCustomersRoute
+  '/app/daily-sheet': typeof AppDailySheetRoute
   '/app/expenses': typeof AppExpensesRoute
   '/app/migration': typeof AppMigrationRoute
   '/app/notifications': typeof AppNotificationsRoute
@@ -855,6 +873,7 @@ export interface FileRouteTypes {
     | '/admin/master-data'
     | '/admin/notifications'
     | '/admin/profile'
+    | '/admin/rates'
     | '/admin/reports'
     | '/admin/reviews'
     | '/admin/settings'
@@ -863,6 +882,7 @@ export interface FileRouteTypes {
     | '/admin/upgrade-requests'
     | '/app/calculator'
     | '/app/customers'
+    | '/app/daily-sheet'
     | '/app/expenses'
     | '/app/migration'
     | '/app/notifications'
@@ -943,6 +963,7 @@ export interface FileRouteTypes {
     | '/admin/master-data'
     | '/admin/notifications'
     | '/admin/profile'
+    | '/admin/rates'
     | '/admin/reports'
     | '/admin/reviews'
     | '/admin/settings'
@@ -951,6 +972,7 @@ export interface FileRouteTypes {
     | '/admin/upgrade-requests'
     | '/app/calculator'
     | '/app/customers'
+    | '/app/daily-sheet'
     | '/app/expenses'
     | '/app/migration'
     | '/app/notifications'
@@ -1035,6 +1057,7 @@ export interface FileRouteTypes {
     | '/admin/master-data'
     | '/admin/notifications'
     | '/admin/profile'
+    | '/admin/rates'
     | '/admin/reports'
     | '/admin/reviews'
     | '/admin/settings'
@@ -1043,6 +1066,7 @@ export interface FileRouteTypes {
     | '/admin/upgrade-requests'
     | '/app/calculator'
     | '/app/customers'
+    | '/app/daily-sheet'
     | '/app/expenses'
     | '/app/migration'
     | '/app/notifications'
@@ -1481,6 +1505,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExpensesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/daily-sheet': {
+      id: '/app/daily-sheet'
+      path: '/daily-sheet'
+      fullPath: '/app/daily-sheet'
+      preLoaderRoute: typeof AppDailySheetRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/customers': {
       id: '/app/customers'
       path: '/customers'
@@ -1535,6 +1566,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/admin/reports'
       preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/rates': {
+      id: '/admin/rates'
+      path: '/rates'
+      fullPath: '/admin/rates'
+      preLoaderRoute: typeof AdminRatesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/profile': {
@@ -1779,6 +1817,7 @@ interface AdminRouteChildren {
   AdminMasterDataRoute: typeof AdminMasterDataRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminProfileRoute: typeof AdminProfileRoute
+  AdminRatesRoute: typeof AdminRatesRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -1798,6 +1837,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminMasterDataRoute: AdminMasterDataRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminProfileRoute: AdminProfileRoute,
+  AdminRatesRoute: AdminRatesRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
@@ -1812,6 +1852,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 interface AppRouteChildren {
   AppCalculatorRoute: typeof AppCalculatorRoute
   AppCustomersRoute: typeof AppCustomersRoute
+  AppDailySheetRoute: typeof AppDailySheetRoute
   AppExpensesRoute: typeof AppExpensesRoute
   AppMigrationRoute: typeof AppMigrationRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
@@ -1830,6 +1871,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppCalculatorRoute: AppCalculatorRoute,
   AppCustomersRoute: AppCustomersRoute,
+  AppDailySheetRoute: AppDailySheetRoute,
   AppExpensesRoute: AppExpensesRoute,
   AppMigrationRoute: AppMigrationRoute,
   AppNotificationsRoute: AppNotificationsRoute,

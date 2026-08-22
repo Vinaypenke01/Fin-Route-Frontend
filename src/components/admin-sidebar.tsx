@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Building2, CreditCard, FileText, Ticket, Sliders,
   Database, BarChart3, ScrollText, Activity, Bell, Settings, User,
-  LogOut, ShieldCheck, Gauge, MessageSquare,
+  LogOut, ShieldCheck, Gauge, MessageSquare, IndianRupee,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -12,6 +12,7 @@ import {
 const platform = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true },
   { title: "Lender Management", url: "/admin/lenders", icon: Building2 },
+  { title: "Rates & Pricing", url: "/admin/rates", icon: IndianRupee },
   { title: "Upgrade Requests", url: "/admin/upgrade-requests", icon: ShieldCheck },
   { title: "Customer Reviews", url: "/admin/reviews", icon: MessageSquare },
   { title: "Subscriptions", url: "/admin/subscriptions", icon: CreditCard },

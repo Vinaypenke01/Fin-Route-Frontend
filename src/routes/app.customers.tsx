@@ -22,6 +22,7 @@ import { mastersService, MasterItem } from "@/lib/services/masters-service";
 import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/download-customer-image";
 import { validateMobileNumber } from "@/lib/auth-validation";
 import { exportCustomersToExcelWorkbook } from "@/lib/customer-export-utils";
+import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 
 export const Route = createFileRoute("/app/customers")({
   head: () => ({ meta: [{ title: "Customers — FinRoute" }, { name: "description", content: "Manage your customers, loans and collection history." }] }),
@@ -370,7 +371,8 @@ function CustomersPage() {
   const activeCount = customers.filter((c) => c.status === "active").length;
 
   return (
-    <div className="space-y-6">
+    <FeaturePaywallGuard module="customers">
+      <div className="space-y-6">
       <GuestPlanUsage />
 
       {/* Metrics Row */}
@@ -1034,10 +1036,11 @@ function CustomersPage() {
         />
       )}
     </div>
+  </FeaturePaywallGuard>
   );
 }
 
-function NewCustomerModal({
+export function NewCustomerModal({
   onSuccess,
   open,
   setOpen,
@@ -1171,6 +1174,12 @@ function NewCustomerModal({
   const finalInstallmentAmount = isCustomInstallmentEdited && customInstallmentAmount !== ""
     ? Number(customInstallmentAmount) || 0
     : Math.round(calculatedPerInstallment);
+
+  const effectivePerInstallment = finalInstallmentAmount;
+  const remainingOutstanding = isExistingBorrower
+    ? Math.max(0, totalPayable - (Number(amountAlreadyCollected) || 0))
+    : totalPayable;
+  const nextDueInstallmentNo = isExistingBorrower ? paidCountNum + 1 : 1;
 
   useEffect(() => {
     if (!isCustomInstallmentEdited) {
@@ -1521,7 +1530,7 @@ function NewCustomerModal({
   );
 }
 
-function EditCustomerModal({
+export function EditCustomerModal({
   customer,
   open,
   setOpen,
