@@ -76,11 +76,11 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
   };
 
   const isFreePlan = workspace?.subscription_plan === "free";
-  const savedMaxFreeStr = localStorage.getItem("finroute_admin_max_free_lines") || "3";
-  const savedMaxFree = parseInt(savedMaxFreeStr.replace(/\D/g, "") || "3", 10) || 3;
-  const maxAllowedLines = isFreePlan ? (workspace?.max_allowed_collection_days ? Math.min(workspace.max_allowed_collection_days, savedMaxFree) : savedMaxFree) : 999;
+  const savedMaxFreeStr = localStorage.getItem("finroute_admin_max_free_lines") || "2";
+  const savedMaxFree = parseInt(savedMaxFreeStr.replace(/\D/g, "") || "2", 10) || 2;
+  const maxAllowedLines = isFreePlan ? Math.max(workspace?.max_allowed_collection_days || 0, savedMaxFree) : 999;
 
-  // Plan is exhausted ONLY if user tries to add a NEW line beyond their allowed line quota (e.g. 2 or 3 lines)
+  // Plan is exhausted ONLY if user tries to add a NEW line beyond their allowed line quota (e.g. 2 lines)
   const isPlanExhausted = isFreePlan && !lineToEdit && existingLines.length >= maxAllowedLines;
 
   const handleToggleDayPortion = (day: string, portion: "morning" | "afternoon" | "both") => {
