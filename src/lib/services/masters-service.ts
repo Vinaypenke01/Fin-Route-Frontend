@@ -176,4 +176,23 @@ export const mastersService = {
     const res = await apiRequest<PostalItem>(`/masters/postal/?pin=${pin}`);
     return res.data;
   },
+
+  async getPublicConfig(): Promise<{
+    upgrade_price: string;
+    max_free_lines: string;
+    upgraded_lines: string;
+    plan_duration: string;
+    whatsapp_number: string;
+    whatsapp_template: string;
+  }> {
+    const res = await apiRequest<{
+      upgrade_price: string;
+      max_free_lines: string;
+      upgraded_lines: string;
+      plan_duration: string;
+      whatsapp_number: string;
+      whatsapp_template: string;
+    }>("/masters/public-config/");
+    return res.data;
+  },
 };

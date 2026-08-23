@@ -140,8 +140,17 @@ function AdminUpgradeRequestsPage() {
                       </div>
                     </TableCell>
 
-                    <TableCell className="font-semibold text-xs text-primary">
-                      {r.plan_name}
+                    <TableCell className="space-y-1">
+                      {r.plan_code === "full_module_unlock" ? (
+                        <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] gap-1 px-2 py-0.5">
+                          🔓 Full Module Unlock
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] gap-1 px-2 py-0.5">
+                          🛣️ Line Quota Upgrade
+                        </Badge>
+                      )}
+                      <span className="block font-semibold text-xs text-foreground mt-0.5">{r.plan_name}</span>
                     </TableCell>
 
                     <TableCell className="font-bold text-xs font-mono">
@@ -149,9 +158,15 @@ function AdminUpgradeRequestsPage() {
                     </TableCell>
 
                     <TableCell className="text-xs">
-                      <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[11px]">
-                        +{r.additional_days} Day{r.additional_days > 1 ? "s" : ""}
-                      </Badge>
+                      {r.plan_code === "full_module_unlock" || r.additional_days === 0 ? (
+                        <Badge variant="outline" className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[10px] font-bold">
+                          All Modules
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
+                          +{r.additional_days} Line{r.additional_days > 1 ? "s" : ""}
+                        </Badge>
+                      )}
                     </TableCell>
 
                     <TableCell>

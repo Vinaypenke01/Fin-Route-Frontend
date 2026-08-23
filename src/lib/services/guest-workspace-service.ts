@@ -452,7 +452,7 @@ export const guestWorkspaceService = {
     additional_days: number;
     amount: number;
   }): Promise<any> {
-    const res = await apiRequest<any>("/app/upgrade/request/", {
+    const res = await apiRequest<any>("/app/upgrade/submit/", {
       method: "POST",
       body: JSON.stringify(payload),
     });

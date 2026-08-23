@@ -399,7 +399,10 @@ function ReportsPage() {
   const filteredCollections = useMemo(() => {
     return collections.filter((c) => {
       // Exclude initial opening balance entries from regular revenue reports
-      const isOpening = c.remarks?.toLowerCase().includes("initial opening");
+      const isOpening =
+        c.remarks?.toLowerCase().includes("opening balance") ||
+        c.remarks?.toLowerCase().includes("initial opening") ||
+        c.receipt_number?.startsWith("INIT-OPEN");
       if (isOpening) return false;
 
       const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : "";

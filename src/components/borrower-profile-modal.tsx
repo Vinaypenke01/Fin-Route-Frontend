@@ -305,7 +305,7 @@ export function BorrowerProfileDetailsModal({
               <h4 className="text-xs font-bold text-foreground">Installment Passbook</h4>
               <InstallmentPassbookGrid
                 total={activeCustomer.total_installments || 20}
-                paid={activeCustomer.installments_paid_count || 0}
+                paid={history.filter((c) => c.status_code === "paid" || (c.status_name && c.status_name.toLowerCase().includes("paid")) || Number(c.collected_amount || 0) > 0).length || activeCustomer.installments_paid_count || 0}
                 skipped={activeCustomer.skipped_installments_count || 0}
                 historyStatuses={buildHistoryStatuses(history)}
               />

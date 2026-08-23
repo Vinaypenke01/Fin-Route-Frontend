@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Check, Calendar, Crown, RefreshCw, CheckCircle2, Zap, Users, ArrowRight, ShieldCheck } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, UpgradePlansResponse, PlanOption } from "@/lib/services/guest-workspace-service";
+import { mastersService } from "@/lib/services/masters-service";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/app/upgrade")({
@@ -69,8 +70,17 @@ function UpgradePage() {
       setPurchasingCode(null);
     }
 
-    // 2. Redirect to WhatsApp using VITE_WHATSAPP_NUMBER from .env
-    const rawNumber = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_WHATSAPP_SUPPORT_NUMBER || "918978388567";
+    // 2. Redirect to WhatsApp using configured Admin WhatsApp number or fallback .env
+    const savedWa = localStorage.getItem("finroute_admin_whatsapp_number");
+    let rawNumber = savedWa || import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_WHATSAPP_SUPPORT_NUMBER || "919876543210";
+
+    try {
+      const cfg = await mastersService.getPublicConfig();
+      if (cfg.whatsapp_number) {
+        rawNumber = cfg.whatsapp_number;
+      }
+    } catch (e) {}
+
     const cleanNumber = String(rawNumber).replace(/\D/g, "");
     const wsName = workspace?.name || `${user?.full_name || "Lender"} Finance`;
 

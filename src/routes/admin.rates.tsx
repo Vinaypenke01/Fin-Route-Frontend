@@ -53,8 +53,9 @@ function RatesAdminPage() {
   const [lockExpenses, setLockExpenses] = useState(true);
   const [lockReports, setLockReports] = useState(true);
 
-  // Load Saved Pricing Config from LocalStorage / Backend
+  // Load Saved Pricing Config from LocalStorage / Backend API
   useEffect(() => {
+    // 1. Load locally for instant rendering
     const savedPrice = localStorage.getItem("finroute_admin_upgrade_price");
     const savedFreeLines = localStorage.getItem("finroute_admin_max_free_lines");
     const savedUpgradedLines = localStorage.getItem("finroute_admin_upgraded_lines");
@@ -68,6 +69,21 @@ function RatesAdminPage() {
     if (savedDuration) setPlanDuration(savedDuration);
     if (savedWa) setWhatsappNumber(savedWa);
     if (savedTpl) setMessageTemplate(savedTpl);
+
+    // 2. Fetch latest configuration from Backend API
+    adminService.getConfiguration().then((configs) => {
+      if (!Array.isArray(configs)) return;
+      configs.forEach((item) => {
+        if (item.key === "finroute_admin_upgrade_price" && item.value) setFixedMonthlyPrice(item.value);
+        if (item.key === "finroute_admin_max_free_lines" && item.value) setMaxFreeLines(item.value);
+        if (item.key === "finroute_admin_upgraded_lines" && item.value) setUpgradedLinesCount(item.value);
+        if (item.key === "finroute_admin_plan_duration" && item.value) setPlanDuration(item.value);
+        if (item.key === "finroute_admin_whatsapp_number" && item.value) setWhatsappNumber(item.value);
+        if (item.key === "finroute_admin_whatsapp_template" && item.value) setMessageTemplate(item.value);
+      });
+    }).catch((err) => {
+      console.warn("Could not fetch remote admin configs:", err);
+    });
   }, []);
 
   const handleSaveConfig = async (e: React.FormEvent) => {
@@ -75,7 +91,7 @@ function RatesAdminPage() {
     setSaving(true);
 
     try {
-      // Save locally & persist configuration
+      // 1. Save locally for fallback
       localStorage.setItem("finroute_admin_upgrade_price", fixedMonthlyPrice);
       localStorage.setItem("finroute_admin_max_free_lines", maxFreeLines);
       localStorage.setItem("finroute_admin_upgraded_lines", upgradedLinesCount);
@@ -83,9 +99,20 @@ function RatesAdminPage() {
       localStorage.setItem("finroute_admin_whatsapp_number", whatsappNumber);
       localStorage.setItem("finroute_admin_whatsapp_template", messageTemplate);
 
-      toast.success("Rates, Line Limits & Duration configuration saved successfully!");
+      // 2. Call backend API to persist all configuration settings to Django PostgreSQL database
+      await Promise.all([
+        adminService.updateConfiguration("finroute_admin_upgrade_price", fixedMonthlyPrice),
+        adminService.updateConfiguration("finroute_admin_max_free_lines", maxFreeLines),
+        adminService.updateConfiguration("finroute_admin_upgraded_lines", upgradedLinesCount),
+        adminService.updateConfiguration("finroute_admin_plan_duration", planDuration),
+        adminService.updateConfiguration("finroute_admin_whatsapp_number", whatsappNumber),
+        adminService.updateConfiguration("finroute_admin_whatsapp_template", messageTemplate),
+      ]);
+
+      toast.success("Rates, Line Limits & WhatsApp Number saved to server & database successfully!");
     } catch (err: any) {
-      toast.error(err?.message || "Failed to save configuration.");
+      console.error("Failed to save admin rates config:", err);
+      toast.error(err?.message || "Failed to save configuration to server.");
     } finally {
       setSaving(false);
     }

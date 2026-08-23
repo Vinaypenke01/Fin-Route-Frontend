@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { mastersService } from "@/lib/services/masters-service";
+import { guestWorkspaceService } from "@/lib/services/guest-workspace-service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +18,7 @@ import {
   CheckCircle2,
   MapPin,
   Clock,
+  Loader2,
 } from "lucide-react";
 
 interface FeaturePaywallGuardProps {
@@ -25,47 +28,55 @@ interface FeaturePaywallGuardProps {
 
 const MODULE_DETAILS = {
   customers: {
-    title: "Borrower Profiles & Passbooks",
+    title: "Borrower Profiles & Passbook Suite",
     icon: Users,
-    description: "Manage individual customer registers, full passbooks, loan terms, and search histories.",
+    description: "Manage individual customer registers, full passbooks, loan terms, and customer card images.",
     features: [
-      "Full Borrower Personal & Address Info",
-      "Individual Digital Passbook Ledgers",
-      "Custom Interest & Principal Terms",
-      "Sequence Order Re-arrangements",
+      "🎴 Downloadable Passbook Cards (Share on WhatsApp)",
+      "📱 Borrower Personal & Contact History Registers",
+      "📜 20-Installment Strikethrough Passbook Grid",
+      "🔄 Drag & Drop Custom Route Sequence Re-order",
+      "⚡ Auto-Calculate Interest, Penalty & Principal",
+      "🔍 Search & Filter Borrowers by Line & Status",
     ],
   },
   collections: {
-    title: "Collections Register & PDF Receipts",
+    title: "Collections Register & Automated Email Receipts",
     icon: Wallet,
-    description: "View historical collection audit logs, payment mode filters, and download printable receipt PDFs.",
+    description: "View historical collection audit logs, payment mode filters, and receive daily automated route email reports.",
     features: [
-      "Collection Audit Log & History",
-      "Printable PDF Payment Receipts",
-      "Filter by Cash vs. Online / UPI Modes",
-      "Historical Collection Reconciliations",
+      "📧 Automated Route Closure Email Reports (Direct to Inbox)",
+      "🖨️ Printable PDF Collection Receipts with Business Branding",
+      "📲 WhatsApp Instant Payment Statements for Borrowers",
+      "💳 Cash vs. Online / UPI Mode Reconciliation",
+      "📜 Complete Collection Audit Logs & Timestamp History",
+      "❌ Undo / Edit Collection Records with Full Audit Control",
     ],
   },
   expenses: {
-    title: "Operational Expense Tracking",
+    title: "Operational Expense Tracking & Net Profit",
     icon: Receipt,
-    description: "Track route fuel expenses, office supplies, and daily cash outflows.",
+    description: "Track route fuel expenses, office supplies, and daily cash outflows to compute net profit.",
     features: [
-      "Daily Operational Outflow Logging",
-      "Expense Receipt Image Uploads",
-      "Expense Categories (Fuel, Food, Rent)",
-      "Automated Net Profit/Loss Math",
+      "⛽ Daily Route Fuel & Operational Outflow Logging",
+      "📷 Expense Receipt Photo Attachment Uploads",
+      "📊 Category-Wise Outflow Breakdown (Fuel, Food, Rent)",
+      "💰 Automated Net Profit Math (Collections minus Expenses)",
+      "📑 Route Cash Reconciliation & Opening Handover Float",
+      "📈 Daily Outflow Audit Summary Reports",
     ],
   },
   reports: {
-    title: "Reports & Financial Analytics",
+    title: "Financial Analytics & Export Suite",
     icon: FileBarChart,
-    description: "Export CSVs, print daily summary ledgers, and track route collection performance.",
+    description: "Export Excel/CSVs, print summary ledgers, and track route collection performance.",
     features: [
-      "Printable PDF Ledger Summaries",
-      "Excel & CSV Data Exports",
-      "Route Collection Performance Charts",
-      "P&L & Outstanding Balance Audits",
+      "📥 1-Click Excel & CSV Full Raw Data Exports",
+      "📊 Complete P&L Statements & Financial Analytics",
+      "🖨️ Printable Branded PDF Summary Ledgers",
+      "📧 Scheduled End-of-Day Email Reports with PDF Attachments",
+      "📈 Route Collection Performance & Outstanding Balances",
+      "📅 Custom Date Range & Weekly Cycle Performance Audits",
     ],
   },
 };
@@ -80,8 +91,10 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
   const [upgradedLines, setUpgradedLines] = useState("Unlimited Lines");
   const [duration, setDuration] = useState("1 Month (30 Days)");
   const [waNumber, setWaNumber] = useState("919876543210");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // 1. Read local storage for instant render
     const savedPrice = localStorage.getItem("finroute_admin_upgrade_price");
     const savedFreeLines = localStorage.getItem("finroute_admin_max_free_lines");
     const savedUpgradedLines = localStorage.getItem("finroute_admin_upgraded_lines");
@@ -93,6 +106,17 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
     if (savedUpgradedLines) setUpgradedLines(savedUpgradedLines);
     if (savedDuration) setDuration(savedDuration);
     if (savedWa) setWaNumber(savedWa);
+
+    // 2. Fetch live admin configuration from Backend REST API
+    mastersService.getPublicConfig().then((cfg) => {
+      if (cfg.upgrade_price) setPrice(cfg.upgrade_price);
+      if (cfg.max_free_lines) setFreeLines(cfg.max_free_lines);
+      if (cfg.upgraded_lines) setUpgradedLines(cfg.upgraded_lines);
+      if (cfg.plan_duration) setDuration(cfg.plan_duration);
+      if (cfg.whatsapp_number) setWaNumber(cfg.whatsapp_number);
+    }).catch((err) => {
+      console.warn("Could not load public config for paywall:", err);
+    });
   }, []);
 
   // If user has upgraded (e.g. premium, enterprise, starter, or active paid plan), render normal feature children
@@ -112,7 +136,28 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
     `Hi FinRoute Admin! 👋\nI would like to unlock Customers, Collections, Expenses & Reports for my workspace.\n\nBusiness Name: ${workspaceName}\nWorkspace Code: ${workspaceCode}\nFree Plan Limit: ${freeLines}\nRequesting Upgrade: ${upgradedLines} (${duration})\nContact: ${user?.mobile_number || ""}\n\nPlease share payment details to activate my account!`
   );
 
-  const whatsappUrl = `https://wa.me/${waNumber}?text=${messageText}`;
+  const cleanWaNumber = String(waNumber).replace(/\D/g, "") || "919876543210";
+  const whatsappUrl = `https://wa.me/${cleanWaNumber}?text=${messageText}`;
+
+  const handleWhatsAppClick = async () => {
+    setSubmitting(true);
+    try {
+      // Record upgrade request in database so Admin sees it in /admin/upgrade-requests
+      await guestWorkspaceService.submitUpgradeRequest({
+        plan_code: "full_module_unlock",
+        plan_name: `Full Premium Unlock (${details.title})`,
+        additional_days: 0,
+        amount: parseFloat(price) || 499,
+      });
+    } catch (err) {
+      console.warn("Backend upgrade request notice:", err);
+    } finally {
+      setSubmitting(false);
+    }
+
+    // Open WhatsApp link
+    window.open(whatsappUrl, "_blank");
+  };
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center p-4">
@@ -120,7 +165,7 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
         {/* Top Decorative Banner */}
         <div className="bg-primary/10 border-b border-primary/20 p-4 text-center">
           <Badge className="bg-primary text-primary-foreground font-bold px-3 py-1 text-xs gap-1.5 shadow-xs">
-            <Sparkles className="size-3.5 animate-spin" /> Premium Feature Upgrade
+            <Sparkles className="size-3.5 animate-spin" /> Full Premium Feature Unlock
           </Badge>
         </div>
 
@@ -152,7 +197,7 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
                 <span className="text-xs font-bold text-foreground block">
                   Free Plan: <span className="font-mono text-muted-foreground">{freeLines}</span> → Upgraded: <span className="font-mono font-black text-emerald-700 dark:text-emerald-400">{upgradedLines}</span>
                 </span>
-                <span className="text-[11px] text-muted-foreground">Unlimited route collections & borrower passbooks</span>
+                <span className="text-[11px] text-muted-foreground">Unlimited route collections, borrower passbooks & reports</span>
               </div>
             </div>
             <Badge variant="outline" className="bg-background text-emerald-700 dark:text-emerald-300 font-bold border-emerald-500/40 text-[11px] shrink-0 gap-1">
@@ -161,9 +206,9 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
           </div>
 
           {/* Features Grid */}
-          <div className="p-4 bg-muted/50 rounded-2xl border border-border/60 text-left">
-            <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider text-center">
-              ✨ What's Included in Your Upgrade:
+          <div className="p-4 bg-muted/50 rounded-2xl border border-border/60 text-left space-y-3">
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
+              <Sparkles className="size-3.5 text-amber-500" /> What's Included in Your Upgrade:
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {details.features.map((feat, idx) => (
@@ -172,6 +217,26 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
                   <span>{feat}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Key Value Conversion Highlights Banner */}
+          <div className="p-3.5 bg-primary/5 rounded-2xl border border-primary/20 text-left grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-medium text-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">📧</span>
+              <span>Daily Email Reports</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">🎴</span>
+              <span>Passbook Cards</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">🖨️</span>
+              <span>Printable Receipts</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">📥</span>
+              <span>Excel/CSV Exports</span>
             </div>
           </div>
 
@@ -187,16 +252,46 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
             </div>
           </div>
 
+          {/* Terms, Rules & Cancellation Policy Disclaimer Box */}
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left space-y-2">
+            <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300 text-xs">
+              <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>Important Subscription Terms & Rules:</span>
+            </div>
+            <ul className="text-[11px] text-muted-foreground space-y-1 pl-1 list-none font-medium">
+              <li className="flex items-start gap-1.5">
+                <span className="text-amber-600 font-bold shrink-0">•</span>
+                <span><strong className="text-foreground font-semibold">No Cancellations or Refunds:</strong> Payments are final, fixed, and non-refundable once activated by Admin.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-amber-600 font-bold shrink-0">•</span>
+                <span><strong className="text-foreground font-semibold">Fixed Plan Duration:</strong> Valid for {duration} from the exact time of Admin approval.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-amber-600 font-bold shrink-0">•</span>
+                <span><strong className="text-foreground font-semibold">Non-Transferable License:</strong> Bound exclusively to your registered workspace code <span className="font-mono font-bold text-foreground">{workspaceCode}</span>.</span>
+              </li>
+            </ul>
+          </div>
+
           {/* Actions */}
-          <div className="space-y-3 pt-2">
-            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
-              <Button size="lg" className="w-full h-12 text-sm sm:text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg hover:shadow-emerald-600/25">
-                <MessageCircle className="size-5" /> Unlock Features via WhatsApp
-                <ArrowRight className="size-4 ml-auto" />
-              </Button>
-            </a>
-            <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1">
-              <ShieldCheck className="size-3.5 text-emerald-600" /> WhatsApp payment verification & manual approval by Admin.
+          <div className="space-y-3 pt-1">
+            <Button
+              onClick={handleWhatsAppClick}
+              disabled={submitting}
+              size="lg"
+              className="w-full h-12 text-sm sm:text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-lg hover:shadow-emerald-600/25"
+            >
+              {submitting ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <MessageCircle className="size-5" />
+              )}
+              Unlock Features via WhatsApp
+              <ArrowRight className="size-4 ml-auto" />
+            </Button>
+            <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1 text-center">
+              <ShieldCheck className="size-3.5 text-emerald-600 shrink-0" /> By clicking above, you agree to FinRoute Upgrade Terms & No-Cancellation Policy.
             </p>
           </div>
         </CardContent>
