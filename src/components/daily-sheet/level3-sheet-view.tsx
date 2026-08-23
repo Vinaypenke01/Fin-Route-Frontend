@@ -19,10 +19,17 @@ import {
   RefreshCw,
   Wallet,
   IndianRupee,
+  Clock,
+  Calculator,
+  TrendingUp,
+  TrendingDown,
+  Receipt,
+  Sparkles,
 } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { CollectionLine, Customer } from "@/lib/services/guest-workspace-service";
 import { SheetRowItem } from "./record-collection-modal";
+import { RouteSettlementAnalytics } from "./stop-route-modal";
 
 export function Level3SheetView({
   activeLine,
@@ -39,6 +46,7 @@ export function Level3SheetView({
   savingRowId,
   isRouteStarted,
   routeOpeningCash,
+  settlementAnalytics,
   onBackToCycles,
   onStartRouteClick,
   onStopRouteClick,
@@ -61,6 +69,7 @@ export function Level3SheetView({
   savingRowId: string | null;
   isRouteStarted: boolean;
   routeOpeningCash: number;
+  settlementAnalytics?: RouteSettlementAnalytics;
   onBackToCycles: () => void;
   onStartRouteClick: () => void;
   onStopRouteClick: () => void;
@@ -81,6 +90,7 @@ export function Level3SheetView({
   const totalRemaining = Math.max(0, totalExpected - totalCollected);
 
   const activeDaySchedules = activeLine.day_schedules || [];
+  const isSettled = !!settlementAnalytics?.isSettled;
 
   return (
     <div className="space-y-6">
@@ -96,34 +106,101 @@ export function Level3SheetView({
             <ArrowLeft className="size-4" /> Back to Route Cycles
           </Button>
 
-          {/* Route Active Status Indicator & Actions */}
+          {/* Distinct 3-State Route Status Indicators */}
           <div className="flex items-center gap-2">
-            {isRouteStarted ? (
+            {isSettled ? (
+              <Badge className="bg-emerald-600 text-white font-black text-xs px-3 py-1 gap-1.5 shadow-xs">
+                <CheckCircle2 className="size-3.5" /> Route Settled & Closed
+              </Badge>
+            ) : isRouteStarted ? (
               <>
-                <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1 gap-1.5 shadow-xs">
-                  <CheckCircle2 className="size-3.5" /> Route Active (Opening Cash: {inr(routeOpeningCash)})
+                <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1 gap-1.5 shadow-xs animate-pulse">
+                  <Play className="size-3.5 fill-current" /> Route Active (Opening: {inr(routeOpeningCash)})
                 </Badge>
                 <Button
                   onClick={onStopRouteClick}
                   size="sm"
                   variant="destructive"
                   className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1.5 shadow-xs rounded-xl"
-                  title="Stop Route Collection"
+                  title="Stop Route & Settle Session"
                 >
                   <Square className="size-3.5 fill-current" /> Stop Route
                 </Button>
               </>
             ) : (
-              <Button
-                onClick={onStartRouteClick}
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-xs rounded-xl"
-              >
-                <Play className="size-3.5 fill-current" /> Start Route Collection
-              </Button>
+              <>
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-bold text-xs px-3 py-1 gap-1.5">
+                  <Clock className="size-3.5 text-amber-600" /> Route Not Started
+                </Badge>
+                <Button
+                  onClick={onStartRouteClick}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-xs rounded-xl"
+                >
+                  <Play className="size-3.5 fill-current" /> Start Route Collection
+                </Button>
+              </>
             )}
           </div>
         </div>
+
+        {/* 3-State Session Visual Banner Box */}
+        {isSettled ? (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="size-4 text-emerald-600" /> Session Status: Closed & Settled
+              </span>
+              <Badge className="bg-emerald-600 text-white font-mono font-bold text-xs px-2.5 py-0.5">
+                {inr(settlementAnalytics.netHandCash)} Net Handover Cash
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+              <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold block">Opening Cash</span>
+                <span className="font-bold text-foreground">{inr(settlementAnalytics.openingCash)}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 uppercase font-bold block">Collected</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{inr(settlementAnalytics.totalCollected)}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                <span className="text-[9px] text-rose-600 dark:text-rose-400 uppercase font-bold block">Disbursed</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400">{inr(settlementAnalytics.totalDisbursed)}</span>
+              </div>
+              <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                <span className="text-[9px] text-amber-600 dark:text-amber-400 uppercase font-bold block">Expenses</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{inr(settlementAnalytics.totalExpenses)}</span>
+              </div>
+            </div>
+          </div>
+        ) : isRouteStarted ? (
+          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
+            <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+              <Play className="size-4 text-emerald-600 fill-current" /> Route Session Active & In Progress. Log collections below and click <strong>Stop Route</strong> when finished to settle cash bag.
+            </span>
+            <Button
+              onClick={onStopRouteClick}
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1 rounded-xl shrink-0"
+            >
+              <Square className="size-3 fill-current" /> Stop Route
+            </Button>
+          </div>
+        ) : (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+            <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <Clock className="size-4 text-amber-600" /> Route Session Not Started Yet. Click <strong>Start Route Collection</strong> to enter opening cash float.
+            </span>
+            <Button
+              onClick={onStartRouteClick}
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1 rounded-xl shrink-0"
+            >
+              <Play className="size-3 fill-current" /> Start Route
+            </Button>
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border/60 pt-4">
           <div>

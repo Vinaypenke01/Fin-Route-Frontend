@@ -218,8 +218,9 @@ function DailySheetPage() {
     if (!activeLine) return;
     setLoading(true);
     try {
-      const fetchFrom = activeDayTab === "all" ? selectedDateFrom : activeDayTab;
-      const fetchTo = activeDayTab === "all" ? selectedDateTo : activeDayTab;
+      const resolvedTabDate = getSaveDateForRow({ collection_day: activeDayTab } as any);
+      const fetchFrom = activeDayTab === "all" ? selectedDateFrom : resolvedTabDate;
+      const fetchTo = activeDayTab === "all" ? selectedDateTo : resolvedTabDate;
 
       const [custRes, collectionsRes] = await Promise.all([
         guestWorkspaceService.getCustomers({
@@ -237,6 +238,21 @@ function DailySheetPage() {
       const fetchedCusts = custRes.data || [];
       setCustomers(fetchedCusts);
 
+      // Filter customers by activeDayTab if viewing a specific session day (e.g. Sunday or Saturday)
+      let displayCusts = fetchedCusts;
+      if (activeDayTab !== "all") {
+        let targetDay = activeDayTab.toLowerCase();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(activeDayTab)) {
+          const dObj = new Date(activeDayTab);
+          if (!isNaN(dObj.getTime())) {
+            targetDay = dObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+          }
+        }
+        displayCusts = fetchedCusts.filter(
+          (c) => c.collection_day && c.collection_day.toLowerCase() === targetDay
+        );
+      }
+
       const colMap: Record<string, Collection> = {};
       (collectionsRes.data || []).forEach((col) => {
         if (col.customer_public_id) {
@@ -247,7 +263,7 @@ function DailySheetPage() {
       const defaultStatusId = statuses[0]?.id || 1;
       const defaultModeId = paymentModes[0]?.id || 1;
 
-      const rows: SheetRowItem[] = fetchedCusts.map((c) => {
+      const rows: SheetRowItem[] = displayCusts.map((c) => {
         const existingCol = colMap[c.public_id];
         const expAmt = c.installment_amount || c.loan_amount || 0;
 
@@ -269,6 +285,46 @@ function DailySheetPage() {
       });
 
       setSheetRows(rows);
+
+      // Auto-recalculate settlement analytics if route was already settled for this line/date
+      if (activeLine) {
+        const cycleSettlementKey = `${activeLine.public_id}_${selectedDateFrom}_${selectedDateTo}`;
+        const singleSettlementKey = `${activeLine.public_id}_${selectedDate}_${selectedDate}`;
+        const existingSettlement = settlementMap[cycleSettlementKey] || settlementMap[singleSettlementKey];
+
+        if (existingSettlement?.isSettled) {
+          const liveColSum = Object.values(colMap).reduce(
+            (acc, col) => acc + (parseFloat(String(col.collected_amount)) || 0),
+            0
+          );
+          const liveDisbursedSum = fetchedCusts.reduce((acc, c) => {
+            const createdD = (c.start_date || (c as any).created_at || "").slice(0, 10);
+            if (createdD >= selectedDateFrom && createdD <= selectedDateTo) {
+              return acc + (parseFloat(String(c.disbursed_amount || c.loan_amount)) || 0);
+            }
+            return acc;
+          }, 0);
+
+          const updatedAnalytics: RouteSettlementAnalytics = {
+            ...existingSettlement,
+            totalCollected: liveColSum,
+            totalDisbursed: liveDisbursedSum,
+            netHandCash: existingSettlement.openingCash + liveColSum - liveDisbursedSum - existingSettlement.totalExpenses,
+          };
+
+          setSettlementMap((prev) => {
+            const nextMap = {
+              ...prev,
+              [cycleSettlementKey]: updatedAnalytics,
+              [singleSettlementKey]: updatedAnalytics,
+            };
+            try {
+              localStorage.setItem("finroute_settlement_analytics_map", JSON.stringify(nextMap));
+            } catch (e) {}
+            return nextMap;
+          });
+        }
+      }
     } catch (err) {
       console.error("Failed to load sheet rows:", err);
       toast.error("Failed to load customer sheet for selected date.");
@@ -305,6 +361,12 @@ function DailySheetPage() {
 
   // Handle Skipping an Installment (X Button Click)
   const handleSkipRow = async (row: SheetRowItem) => {
+    if (!isRouteStarted && !currentSettlement?.isSettled) {
+      toast.info("Please start route collection and enter opening cash float first!");
+      setIsStartRouteModalOpen(true);
+      return;
+    }
+
     setSavingRowId(row.customer_id);
     try {
       const saveDate = getSaveDateForRow(row);
@@ -536,6 +598,9 @@ function DailySheetPage() {
   const activeRouteTrack = routeStartedMap[cycleRouteKey] || routeStartedMap[singleRouteKey];
   const isRouteStarted = !!activeRouteTrack?.isStarted;
   const routeOpeningCash = activeRouteTrack?.openingCash || 0;
+  const cycleSettlementKey = activeLine ? `${activeLine.public_id}_${selectedDateFrom}_${selectedDateTo}` : "";
+  const singleSettlementKey = activeLine ? `${activeLine.public_id}_${selectedDate}_${selectedDate}` : "";
+  const currentSettlement = settlementMap[cycleSettlementKey] || settlementMap[singleSettlementKey];
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6 max-w-7xl">
@@ -603,12 +668,27 @@ function DailySheetPage() {
           savingRowId={savingRowId}
           isRouteStarted={isRouteStarted}
           routeOpeningCash={routeOpeningCash}
+          settlementAnalytics={currentSettlement}
           onBackToCycles={() => updateNav({ view: "days" })}
           onStartRouteClick={() => setIsStartRouteModalOpen(true)}
           onStopRouteClick={handleStopRoute}
-          onAddCustomerClick={() => setIsAddCustomerModalOpen(true)}
+          onAddCustomerClick={() => {
+            if (!isRouteStarted && !currentSettlement?.isSettled) {
+              toast.info("Please start route collection and enter opening cash float first!");
+              setIsStartRouteModalOpen(true);
+              return;
+            }
+            setIsAddCustomerModalOpen(true);
+          }}
           onEditCustomerClick={(cust) => setEditingCustomer(cust)}
-          onOpenConfirmModal={(row) => setConfirmCollectionRow(row)}
+          onOpenConfirmModal={(row) => {
+            if (!isRouteStarted && !currentSettlement?.isSettled) {
+              toast.info("Please start route collection and enter opening cash float first!");
+              setIsStartRouteModalOpen(true);
+              return;
+            }
+            setConfirmCollectionRow(row);
+          }}
           onSkipRow={(row) => handleSkipRow(row)}
         />
       )}
