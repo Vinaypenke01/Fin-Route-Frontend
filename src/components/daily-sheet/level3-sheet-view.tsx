@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   ArrowLeft,
   CalendarDays,
@@ -12,7 +14,8 @@ import {
   UserPlus,
   Search,
   Users,
-  Edit3,
+  Pencil,
+  Info,
   Check,
   X,
   XCircle,
@@ -92,10 +95,40 @@ export function Level3SheetView({
   const activeDaySchedules = activeLine.day_schedules || [];
   const isSettled = !!settlementAnalytics?.isSettled;
 
+  // Calculate cycle range based ONLY on configured days
+  const configuredCycleRangeText = useMemo(() => {
+    const configuredDays = activeDaySchedules.map((s) => s.day_of_week.toLowerCase());
+    
+    if (configuredDays.length > 0 && selectedDateFrom && selectedDateTo) {
+      const startD = new Date(selectedDateFrom + "T00:00:00");
+      const endD = new Date(selectedDateTo + "T00:00:00");
+      const validDates: string[] = [];
+
+      for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+        const name = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+        if (configuredDays.includes(name)) {
+          validDates.push(d.toISOString().slice(0, 10));
+        }
+      }
+
+      if (validDates.length === 1) {
+        return validDates[0];
+      } else if (validDates.length > 1) {
+        validDates.sort();
+        return `${validDates[0]} to ${validDates[validDates.length - 1]}`;
+      }
+    }
+
+    if (selectedDateFrom === selectedDateTo || !selectedDateTo) {
+      return selectedDateFrom || selectedDate;
+    }
+    return `${selectedDateFrom} to ${selectedDateTo}`;
+  }, [activeDaySchedules, selectedDateFrom, selectedDateTo, selectedDate]);
+
   return (
     <div className="space-y-6">
-      {/* Level 3 Breadcrumb Header */}
-      <div className="bg-card p-6 rounded-3xl border border-border shadow-xs space-y-4">
+      {/* Level 3 Breadcrumb Header & Summary */}
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <Button
             variant="ghost"
@@ -117,6 +150,29 @@ export function Level3SheetView({
                 <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1 gap-1.5 shadow-xs animate-pulse">
                   <Play className="size-3.5 fill-current" /> Active (Opening: {inr(routeOpeningCash)})
                 </Badge>
+                
+                {/* Floating Info Tooltip Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 rounded-xl text-emerald-600 hover:bg-emerald-500/10 border border-emerald-500/30"
+                      title="Route Information"
+                    >
+                      <Info className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="text-xs p-3 font-semibold border-emerald-500/30 w-72 shadow-lg">
+                    <p className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold mb-1">
+                      <Play className="size-3.5 fill-current" /> Active Route Session
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed text-[11px]">
+                      Route session active & in progress. Log collections below and click <strong>Stop Route</strong> when finished to settle cash bag.
+                    </p>
+                  </PopoverContent>
+                </Popover>
+
                 <Button
                   onClick={onStopRouteClick}
                   size="sm"
@@ -132,6 +188,29 @@ export function Level3SheetView({
                 <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-bold text-xs px-3 py-1 gap-1.5">
                   <Clock className="size-3.5 text-amber-600" /> Route Not Started
                 </Badge>
+
+                {/* Floating Info Tooltip Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 rounded-xl text-amber-600 hover:bg-amber-500/10 border border-amber-500/30"
+                      title="Route Information"
+                    >
+                      <Info className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="text-xs p-3 font-semibold border-amber-500/30 w-72 shadow-lg">
+                    <p className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold mb-1">
+                      <Clock className="size-3.5" /> Route Session Not Started
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed text-[11px]">
+                      Route session not started yet. Click <strong>Start Route Collection</strong> to enter opening cash float.
+                    </p>
+                  </PopoverContent>
+                </Popover>
+
                 <Button
                   onClick={onStartRouteClick}
                   size="sm"
@@ -144,8 +223,8 @@ export function Level3SheetView({
           </div>
         </div>
 
-        {/* 3-State Session Visual Banner Box */}
-        {isSettled ? (
+        {/* Closed & Settled Analytics Banner */}
+        {isSettled && (
           <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
@@ -174,18 +253,6 @@ export function Level3SheetView({
               </div>
             </div>
           </div>
-        ) : isRouteStarted ? (
-          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
-            <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-              <Play className="size-4 text-emerald-600 fill-current shrink-0" /> Route Session Active & In Progress. Log collections below and click <strong>Stop Route</strong> when finished to settle cash bag.
-            </span>
-          </div>
-        ) : (
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
-            <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
-              <Clock className="size-4 text-amber-600 shrink-0" /> Route Session Not Started Yet. Click <strong>Start Route Collection</strong> above to enter opening cash float.
-            </span>
-          </div>
         )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border/60 pt-4">
@@ -194,7 +261,7 @@ export function Level3SheetView({
               <CalendarDays className="size-6 text-primary" /> Daily Sheet for {activeLine.name}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cycle Range: <strong>{selectedDateFrom || selectedDate}</strong> to <strong>{selectedDateTo || selectedDate}</strong>
+              Cycle Range: <strong>{configuredCycleRangeText}</strong>
             </p>
           </div>
 
@@ -207,21 +274,21 @@ export function Level3SheetView({
           </Button>
         </div>
 
-        {/* Dynamic Financial Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-          <div className="p-3.5 rounded-2xl bg-muted/50 border border-border">
-            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Expected</span>
-            <span className="text-base font-black font-mono text-foreground">{inr(totalExpected)}</span>
+        {/* Dynamic Financial Summary Cards (Rendered in ONE Single Row) */}
+        <div className="grid grid-cols-3 gap-2 pt-2">
+          <div className="p-2.5 sm:p-3.5 rounded-2xl bg-muted/50 border border-border text-center overflow-hidden">
+            <span className="text-[9px] sm:text-[10px] text-muted-foreground uppercase font-bold block truncate">Total Expected</span>
+            <span className="text-xs sm:text-base font-black font-mono text-foreground block truncate">{inr(totalExpected)}</span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
-            <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase font-bold block">Collected Today</span>
-            <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">{inr(totalCollected)}</span>
+          <div className="p-2.5 sm:p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center overflow-hidden">
+            <span className="text-[9px] sm:text-[10px] text-emerald-800 dark:text-emerald-300 uppercase font-bold block truncate">Collected Today</span>
+            <span className="text-xs sm:text-base font-black font-mono text-emerald-600 dark:text-emerald-400 block truncate">{inr(totalCollected)}</span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-            <span className="text-[10px] text-amber-800 dark:text-amber-300 uppercase font-bold block">Remaining Pending</span>
-            <span className="text-base font-black font-mono text-amber-600 dark:text-amber-400">{inr(totalRemaining)}</span>
+          <div className="p-2.5 sm:p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center overflow-hidden">
+            <span className="text-[9px] sm:text-[10px] text-amber-800 dark:text-amber-300 uppercase font-bold block truncate">Remaining Pending</span>
+            <span className="text-xs sm:text-base font-black font-mono text-amber-600 dark:text-amber-400 block truncate">{inr(totalRemaining)}</span>
           </div>
         </div>
 
@@ -277,7 +344,7 @@ export function Level3SheetView({
           </Button>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filteredSheetRows.map((row) => {
             const isSkipped = row.is_saved && (parseFloat(row.collected_amount) === 0 || row.status_id === 5);
             const isCollected = row.is_saved && parseFloat(row.collected_amount) > 0;
@@ -285,7 +352,7 @@ export function Level3SheetView({
             return (
               <Card
                 key={row.customer_id}
-                className={`p-4 rounded-2xl border transition-all ${
+                className={`p-2.5 sm:p-3 rounded-2xl border transition-all space-y-1.5 ${
                   isCollected
                     ? "bg-emerald-500/5 border-emerald-500/30"
                     : isSkipped
@@ -293,100 +360,96 @@ export function Level3SheetView({
                     : "bg-card border-border shadow-xs"
                 }`}
               >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  {/* Customer Information */}
-                  <div className="flex items-start gap-3">
-                    <div className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-mono text-xs font-bold border border-primary/20 shrink-0">
+                {/* Row 1: ID, Name, Code + Status Badge + Pencil Icon */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <div className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-mono text-[11px] font-black border border-primary/20 shrink-0">
                       #{row.sequence_number}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-sm text-foreground">{row.full_name}</h4>
-                        <span className="text-[11px] font-mono text-muted-foreground">({row.customer_code})</span>
-                        {row.collection_day && (
-                          <Badge className="bg-primary/10 text-primary border-primary/20 capitalize text-[10px] font-bold gap-1 py-0.5">
-                            <CalendarDays className="size-3" /> {row.collection_day}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Phone: <span className="font-mono text-foreground">{row.mobile_number}</span>
-                      </p>
-                    </div>
+                    <h4 className="font-bold text-xs sm:text-sm text-foreground truncate">{row.full_name}</h4>
+                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">({row.customer_code})</span>
                   </div>
 
-                  {/* Financial Badges & Action Buttons */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="text-right pr-1">
-                      <span className="text-[10px] text-muted-foreground block uppercase font-bold">Expected</span>
-                      <span className="text-sm font-bold font-mono text-foreground">{inr(row.expected_amount)}</span>
-                    </div>
-
-                    {/* Saved Collection Status Badge */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Saved Status Badge */}
                     {isCollected ? (
-                      <Badge className="bg-emerald-600 text-white text-xs font-bold py-1 px-2.5 gap-1 shadow-xs">
-                        <CheckCircle2 className="size-3.5" /> Collected {inr(parseFloat(row.collected_amount))}
+                      <Badge className="bg-emerald-600 text-white text-[9px] font-bold py-0 px-1.5 gap-0.5 shadow-xs">
+                        <CheckCircle2 className="size-2.5" /> {inr(parseFloat(row.collected_amount))}
                       </Badge>
                     ) : isSkipped ? (
-                      <Badge className="bg-rose-600 text-white text-xs font-bold py-1 px-2.5 gap-1 shadow-xs">
-                        <XCircle className="size-3.5" /> Skipped for Week
+                      <Badge className="bg-rose-600 text-white text-[9px] font-bold py-0 px-1.5 gap-0.5 shadow-xs">
+                        <XCircle className="size-2.5" /> Skipped
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs font-semibold text-muted-foreground py-1">
+                      <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground py-0 px-1.5">
                         Pending
                       </Badge>
                     )}
 
-                    {/* Quick Profile Edit Button */}
+                    {/* Single Pencil Icon Edit Button at Top Right */}
                     <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 text-xs px-2.5 font-bold"
+                      size="icon"
+                      variant="ghost"
+                      className="size-6 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
+                      title="Edit Borrower Profile"
                       onClick={() => {
                         const targetCust = customers.find((c) => c.public_id === row.customer_id);
                         if (targetCust) onEditCustomerClick(targetCust);
                       }}
                     >
-                      <Edit3 className="size-3.5 mr-1" /> Profile
+                      <Pencil className="size-3" />
                     </Button>
-
-                    {/* Action Buttons: Tick (✓) & Cross (X) */}
-                    <div className="flex items-center gap-2">
-                      {/* Tick Button (✓) - Opens Collection Confirmation Modal */}
-                      <Button
-                        size="sm"
-                        disabled={savingRowId === row.customer_id}
-                        onClick={() => onOpenConfirmModal(row)}
-                        className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-sm gap-1 shadow-xs transition-all active:scale-95"
-                        title="Collect Payment"
-                      >
-                        {savingRowId === row.customer_id ? (
-                          <RefreshCw className="size-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Check className="size-4 stroke-[3]" /> Log
-                          </>
-                        )}
-                      </Button>
-
-                      {/* Cross Button (X) - Skips Week */}
-                      <Button
-                        size="sm"
-                        disabled={savingRowId === row.customer_id}
-                        onClick={() => onSkipRow(row)}
-                        className="h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-extrabold text-sm gap-1 shadow-xs transition-all active:scale-95"
-                        title="Skip for Week"
-                      >
-                        {savingRowId === row.customer_id ? (
-                          <RefreshCw className="size-4 animate-spin" />
-                        ) : (
-                          <>
-                            <X className="size-4 stroke-[3]" /> Skip
-                          </>
-                        )}
-                      </Button>
-                    </div>
                   </div>
+                </div>
+
+                {/* Row 2: Phone + Collection Day (Left) | Expected Amount (Right) */}
+                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <span className="truncate">Phone: <strong className="font-mono text-foreground">{row.mobile_number}</strong></span>
+                    {row.collection_day && (
+                      <>
+                        <span>•</span>
+                        <Badge className="bg-primary/10 text-primary border-primary/20 capitalize text-[9px] font-bold py-0 px-1 shrink-0">
+                          {row.collection_day}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 font-semibold text-[11px]">
+                    Exp: <strong className="font-mono font-bold text-foreground text-xs">{inr(row.expected_amount)}</strong>
+                  </div>
+                </div>
+
+                {/* Row 3: 50% / 50% Full-Width Action Buttons (Tick ✓ & Cross X Icon-Only) */}
+                <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                  {/* Tick Button (✓) - 50% Width, Icon-Only */}
+                  <Button
+                    disabled={savingRowId === row.customer_id}
+                    onClick={() => onOpenConfirmModal(row)}
+                    className="h-8 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black shadow-xs transition-all active:scale-95 flex items-center justify-center"
+                    title="Collect Payment (✓)"
+                  >
+                    {savingRowId === row.customer_id ? (
+                      <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                      <Check className="size-4 stroke-[3]" />
+                    )}
+                  </Button>
+
+                  {/* Cross Button (X) - 50% Width, Icon-Only */}
+                  <Button
+                    disabled={savingRowId === row.customer_id}
+                    onClick={() => onSkipRow(row)}
+                    className="h-8 w-full bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black shadow-xs transition-all active:scale-95 flex items-center justify-center"
+                    title="Skip for Week (X)"
+                  >
+                    {savingRowId === row.customer_id ? (
+                      <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                      <X className="size-4 stroke-[3]" />
+                    )}
+                  </Button>
                 </div>
               </Card>
             );
