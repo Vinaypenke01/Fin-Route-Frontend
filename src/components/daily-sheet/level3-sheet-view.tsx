@@ -96,18 +96,18 @@ export function Level3SheetView({
     <div className="space-y-6">
       {/* Level 3 Breadcrumb Header */}
       <div className="bg-card p-6 rounded-3xl border border-border shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <Button
             variant="ghost"
             size="sm"
             onClick={onBackToCycles}
-            className="text-xs font-bold text-muted-foreground hover:text-foreground gap-1 px-0"
+            className="text-xs font-bold text-muted-foreground hover:text-foreground gap-1 px-0 self-start"
           >
             <ArrowLeft className="size-4" /> Back to Route Cycles
           </Button>
 
           {/* Distinct 3-State Route Status Indicators */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
             {isSettled ? (
               <Badge className="bg-emerald-600 text-white font-black text-xs px-3 py-1 gap-1.5 shadow-xs">
                 <CheckCircle2 className="size-3.5" /> Route Settled & Closed
@@ -115,7 +115,7 @@ export function Level3SheetView({
             ) : isRouteStarted ? (
               <>
                 <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1 gap-1.5 shadow-xs animate-pulse">
-                  <Play className="size-3.5 fill-current" /> Route Active (Opening: {inr(routeOpeningCash)})
+                  <Play className="size-3.5 fill-current" /> Active (Opening: {inr(routeOpeningCash)})
                 </Badge>
                 <Button
                   onClick={onStopRouteClick}
