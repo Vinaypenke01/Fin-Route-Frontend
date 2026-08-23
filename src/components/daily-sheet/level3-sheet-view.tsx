@@ -177,28 +177,14 @@ export function Level3SheetView({
         ) : isRouteStarted ? (
           <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
             <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-              <Play className="size-4 text-emerald-600 fill-current" /> Route Session Active & In Progress. Log collections below and click <strong>Stop Route</strong> when finished to settle cash bag.
+              <Play className="size-4 text-emerald-600 fill-current shrink-0" /> Route Session Active & In Progress. Log collections below and click <strong>Stop Route</strong> when finished to settle cash bag.
             </span>
-            <Button
-              onClick={onStopRouteClick}
-              size="sm"
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1 rounded-xl shrink-0"
-            >
-              <Square className="size-3 fill-current" /> Stop Route
-            </Button>
           </div>
         ) : (
           <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
             <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
-              <Clock className="size-4 text-amber-600" /> Route Session Not Started Yet. Click <strong>Start Route Collection</strong> to enter opening cash float.
+              <Clock className="size-4 text-amber-600 shrink-0" /> Route Session Not Started Yet. Click <strong>Start Route Collection</strong> above to enter opening cash float.
             </span>
-            <Button
-              onClick={onStartRouteClick}
-              size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1 rounded-xl shrink-0"
-            >
-              <Play className="size-3 fill-current" /> Start Route
-            </Button>
           </div>
         )}
 
@@ -243,15 +229,15 @@ export function Level3SheetView({
         {activeDaySchedules.length > 1 && (
           <div className="pt-2">
             <Tabs value={activeDayTab} onValueChange={setActiveDayTab} className="w-full">
-              <TabsList className="grid grid-cols-3 sm:grid-cols-4 w-full h-11 rounded-2xl bg-muted/60 p-1">
-                <TabsTrigger value="all" className="rounded-xl font-bold text-xs">
-                  🌟 All Sessions Combined ({filteredSheetRows.length})
+              <TabsList className="flex items-center gap-1.5 w-full overflow-x-auto bg-muted/60 p-1.5 rounded-2xl no-scrollbar">
+                <TabsTrigger value="all" className="rounded-xl font-bold text-xs shrink-0 whitespace-nowrap px-3 py-1.5">
+                  🌟 All Sessions ({filteredSheetRows.length})
                 </TabsTrigger>
                 {activeDaySchedules.map((s) => {
                   const dayNameCap = s.day_of_week.charAt(0).toUpperCase() + s.day_of_week.slice(1);
                   const portionText = s.portion === "morning" ? "☀️ Morning" : s.portion === "afternoon" ? "🌙 Afternoon" : "🌕 Full";
                   return (
-                    <TabsTrigger key={s.day_of_week} value={s.day_of_week.toLowerCase()} className="rounded-xl font-bold text-xs capitalize">
+                    <TabsTrigger key={s.day_of_week} value={s.day_of_week.toLowerCase()} className="rounded-xl font-bold text-xs capitalize shrink-0 whitespace-nowrap px-3 py-1.5">
                       {dayNameCap} ({portionText})
                     </TabsTrigger>
                   );
