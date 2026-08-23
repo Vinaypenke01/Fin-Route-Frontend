@@ -197,7 +197,7 @@ export function StopRouteSettlementModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {/* Opening & Collected Analytics Highlight Cards */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 bg-muted/60 border border-border rounded-2xl">
               <span className="text-[10px] text-muted-foreground uppercase font-bold block">Opening Cash Bag</span>
               <span className="text-base font-black font-mono text-foreground">{inr(openingCash)}</span>

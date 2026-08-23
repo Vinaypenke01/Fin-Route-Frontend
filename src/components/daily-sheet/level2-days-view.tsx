@@ -158,7 +158,7 @@ export function Level2DaysView({
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-4 gap-1 pt-1 text-[10px]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-[10px]">
                   <div>
                     <span className="text-muted-foreground block text-[9px] uppercase">Opening</span>
                     <span className="font-bold text-foreground">{inr(item.settlementAnalytics.openingCash)}</span>

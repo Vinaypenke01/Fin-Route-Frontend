@@ -311,7 +311,7 @@ export function DailySheetAddCustomerModal({
           </div>
 
           {/* Loan & Installment Math Inputs */}
-          <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div>
               <Label className="text-xs font-bold">Disbursed Amount (₹)</Label>
               <Input
