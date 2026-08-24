@@ -41,6 +41,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: ws.name,
             plan: ws.subscription_plan,
             status: ws.status,
+            subscription_start_date: ws.subscription_start_date,
+            subscription_end_date: ws.subscription_end_date,
           });
         } catch {
           setWorkspace(null);

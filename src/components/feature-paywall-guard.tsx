@@ -119,8 +119,30 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
     });
   }, []);
 
-  // If user has upgraded (e.g. premium, enterprise, starter, or active paid plan), render normal feature children
-  const isUnlocked = plan === "premium" || plan === "enterprise" || plan === "starter";
+  let subEndDateStr = workspace?.subscription_end_date || (workspace as any)?.subscription_end_date;
+  if (!subEndDateStr && (workspace as any)?.subscription_start_date) {
+    const startObj = new Date((workspace as any).subscription_start_date + "T00:00:00");
+    startObj.setDate(startObj.getDate() + 30);
+    subEndDateStr = startObj.toISOString().slice(0, 10);
+  } else if (!subEndDateStr && (workspace as any)?.created_at) {
+    const createdObj = new Date((workspace as any).created_at);
+    createdObj.setDate(createdObj.getDate() + 30);
+    subEndDateStr = createdObj.toISOString().slice(0, 10);
+  }
+
+  let isExpired = false;
+
+  if (subEndDateStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(subEndDateStr + "T00:00:00");
+    if (endDate.getTime() < today.getTime()) {
+      isExpired = true;
+    }
+  }
+
+  // If user has upgraded AND membership is active (not expired), render normal feature children
+  const isUnlocked = (plan === "premium" || plan === "enterprise" || plan === "starter") && !isExpired;
 
   if (isUnlocked) {
     return <>{children}</>;

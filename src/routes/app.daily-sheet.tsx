@@ -26,6 +26,8 @@ import { inr } from "@/lib/utils";
 import { Level1LinesView } from "@/components/daily-sheet/level1-lines-view";
 import { Level2DaysView, RouteCycleItem } from "@/components/daily-sheet/level2-days-view";
 import { Level3SheetView } from "@/components/daily-sheet/level3-sheet-view";
+import { GuestPlanUsage } from "@/components/guest-plan-usage";
+import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
 import { RecordCollectionModal, SheetRowItem } from "@/components/daily-sheet/record-collection-modal";
 import { DailySheetAddCustomerModal } from "@/components/daily-sheet/add-customer-modal";
 import { StopRouteSettlementModal, RouteSettlementAnalytics } from "@/components/daily-sheet/stop-route-modal";
@@ -604,6 +606,8 @@ function DailySheetPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6 max-w-7xl">
+      <GuestPlanUsage />
+      <SubscriptionExpiryBanner />
       {/* ========================================================================= */}
       {/* LEVEL 1: LINES LIST VIEW */}
       {/* ========================================================================= */}

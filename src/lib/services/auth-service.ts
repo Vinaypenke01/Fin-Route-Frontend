@@ -23,6 +23,8 @@ export interface WorkspaceSummary {
   name: string;
   plan: string;
   status: string;
+  subscription_start_date?: string | null;
+  subscription_end_date?: string | null;
 }
 
 export interface LoginResponseData {

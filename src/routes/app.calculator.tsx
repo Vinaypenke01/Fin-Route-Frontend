@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { inr } from "@/lib/utils";
 import { Calculator, Copy, Printer } from "lucide-react";
 import { guestWorkspaceService, CalculatorResult } from "@/lib/services/guest-workspace-service";
+import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
 
 export const Route = createFileRoute("/app/calculator")({
   head: () => ({ meta: [{ title: "Loan Calculator — FinRoute" }, { name: "description", content: "Smart loan calculator for daily, weekly and monthly plans." }] }),
@@ -50,32 +51,34 @@ function CalculatorPage() {
   }, [principalNum, interestNum, durationNum, frequency]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card className="p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-            <Calculator className="size-5" />
-          </div>
-          <div>
-            <h3 className="font-display text-lg font-semibold">Smart Loan Calculator</h3>
-            <p className="text-xs text-muted-foreground">Backend-calculated schedule for any frequency</p>
-          </div>
-        </div>
-        <div className="space-y-6">
-          <div>
-            <div className="flex items-center justify-between">
-              <Label>Loan amount</Label>
-              <span className="text-sm font-semibold">{inr(principalNum)}</span>
+    <div className="space-y-6">
+      <SubscriptionExpiryBanner />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Calculator className="size-5" />
             </div>
-            <div className="mt-2 flex gap-3">
-              <Slider
-                value={[principalNum]}
-                min={1000}
-                max={500000}
-                step={500}
-                onValueChange={([v]) => setPrincipalStr(v.toString())}
-                className="flex-1"
-              />
+            <div>
+              <h3 className="font-display text-lg font-semibold">Smart Loan Calculator</h3>
+              <p className="text-xs text-muted-foreground">Backend-calculated schedule for any frequency</p>
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between">
+                <Label>Loan amount</Label>
+                <span className="text-sm font-semibold">{inr(principalNum)}</span>
+              </div>
+              <div className="mt-2 flex gap-3">
+                <Slider
+                  value={[principalNum]}
+                  min={1000}
+                  max={500000}
+                  step={500}
+                  onValueChange={([v]) => setPrincipalStr(v.toString())}
+                  className="flex-1"
+                />
               <Input
                 type="text"
                 inputMode="numeric"
@@ -202,5 +205,6 @@ function CalculatorPage() {
         </div>
       </Card>
     </div>
+  </div>
   );
 }

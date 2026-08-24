@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -177,20 +177,7 @@ function RatesAdminPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold">Free Plan Lines Limit</Label>
-                <Input
-                  type="text"
-                  className="mt-1 font-mono font-bold"
-                  value={maxFreeLines}
-                  onChange={(e) => setMaxFreeLines(e.target.value)}
-                  placeholder="3 Lines"
-                  required
-                />
-                <p className="text-[10px] text-muted-foreground mt-0.5">Line limit for Free tier.</p>
-              </div>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold">Upgraded Plan Lines Count</Label>
                 <Input
@@ -202,6 +189,18 @@ function RatesAdminPage() {
                   required
                 />
                 <p className="text-[10px] text-muted-foreground mt-0.5">Lines available after payment.</p>
+              </div>
+
+              <div className="p-3 bg-primary/5 rounded-2xl border border-primary/20 space-y-1">
+                <span className="text-[10px] font-bold text-primary uppercase block">Free Tier Days & Quotas</span>
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  Free tier collection day limits and guest user quotas are managed in Guest Plans.
+                </p>
+                <Button asChild variant="outline" size="sm" className="h-7 text-[10px] font-bold mt-1 gap-1 text-primary border-primary/30">
+                  <Link to="/admin/guest-plan">
+                    <Sparkles className="size-3" /> Manage Guest Plans
+                  </Link>
+                </Button>
               </div>
             </div>
 

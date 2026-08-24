@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { inr } from "@/lib/utils";
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
+import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
 import { CollectionDaysSetup } from "@/components/collection-days-setup";
 import { MigrationOnboardingWizardModal } from "@/components/migration-onboarding-modal";
 import { Sparkles } from "lucide-react";
@@ -447,6 +448,7 @@ function DashboardPage() {
       <CollectionDaysSetup />
 
       <GuestPlanUsage />
+      <SubscriptionExpiryBanner />
 
       {/* 1. Route Line Filter Selection */}
       {lines.length > 0 && (

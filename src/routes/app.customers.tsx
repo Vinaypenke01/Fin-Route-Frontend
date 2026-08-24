@@ -23,6 +23,7 @@ import { downloadCustomerCardImage, generateBatchPassbookPages } from "@/lib/dow
 import { validateMobileNumber } from "@/lib/auth-validation";
 import { exportCustomersToExcelWorkbook } from "@/lib/customer-export-utils";
 import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
+import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
 
 export const Route = createFileRoute("/app/customers")({
   head: () => ({ meta: [{ title: "Customers — FinRoute" }, { name: "description", content: "Manage your customers, loans and collection history." }] }),
@@ -374,6 +375,7 @@ function CustomersPage() {
     <FeaturePaywallGuard module="customers">
       <div className="space-y-6">
       <GuestPlanUsage />
+      <SubscriptionExpiryBanner />
 
       {/* Metrics Row */}
       <div className="space-y-3">

@@ -19,6 +19,8 @@ export interface WorkspaceData {
   state: string;
   pin_code: string;
   subscription_plan: "free" | "premium";
+  subscription_start_date?: string | null;
+  subscription_end_date?: string | null;
   status: "active" | "suspended" | "read_only";
   allowed_collection_days?: string[];
   max_allowed_collection_days?: number;
