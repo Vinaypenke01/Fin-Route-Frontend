@@ -419,7 +419,7 @@ function DashboardPage() {
             {workspace?.name ? `${workspace.name} — business overview` : "Here's your business at a glance."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {/* <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" className="gap-1.5 font-bold border-amber-500/40 text-amber-900 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20">
             <Link to="/app/migration">
               <Sparkles className="size-4 text-amber-500" /> Digital Migration / Bulk Import
@@ -435,7 +435,7 @@ function DashboardPage() {
               <UserPlus className="size-4" /> Add Customer
             </Link>
           </Button>
-        </div>
+        </div> */}
       </div>
 
       <MigrationOnboardingWizardModal
@@ -467,11 +467,10 @@ function DashboardPage() {
             <button
               type="button"
               onClick={() => setSelectedLine("all")}
-              className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
-                selectedLine === "all"
+              className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${selectedLine === "all"
                   ? "bg-primary text-primary-foreground border-primary shadow-xs"
                   : "bg-background text-muted-foreground hover:text-foreground border-border"
-              }`}
+                }`}
             >
               All Route Lines
             </button>
@@ -482,11 +481,10 @@ function DashboardPage() {
                   key={ln.public_id}
                   type="button"
                   onClick={() => setSelectedLine(isSelected ? "all" : ln.public_id)}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
-                    isSelected
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${isSelected
                       ? "bg-primary text-primary-foreground border-primary shadow-xs"
                       : "bg-background text-muted-foreground hover:text-foreground border-border"
-                  }`}
+                    }`}
                 >
                   <MapPin className={`size-3 ${isSelected ? "text-primary-foreground" : "text-primary"}`} />
                   <span>{ln.name}</span>

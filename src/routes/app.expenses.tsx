@@ -376,267 +376,265 @@ function ExpensesPage() {
   return (
     <FeaturePaywallGuard module="expenses">
       <div className="space-y-6">
-      <GuestPlanUsage />
-      <SubscriptionExpiryBanner />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="p-4 bg-red-500/5 border-red-500/20">
-          <p className="text-xs font-medium uppercase tracking-wide text-red-800">Operational Expenses ({formatDateLabel()})</p>
-          <p className="mt-1.5 font-display text-2xl font-bold text-red-700">{loading ? "..." : inr(totalExpense)}</p>
-          <p className="text-xs text-red-800/80">{filtered.length} entries recorded</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Average Expense ({formatDateLabel()})</p>
-          <p className="mt-1.5 font-display text-2xl font-bold">
-            {loading ? "..." : inr(filtered.length ? totalExpense / filtered.length : 0)}
-          </p>
-          <p className="text-xs text-muted-foreground">Per entry average</p>
-        </Card>
-      </div>
+        {/* <GuestPlanUsage /> */}
+        <SubscriptionExpiryBanner />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card className="p-4 bg-red-500/5 border-red-500/20">
+            <p className="text-xs font-medium uppercase tracking-wide text-red-800">Operational Expenses ({formatDateLabel()})</p>
+            <p className="mt-1.5 font-display text-2xl font-bold text-red-700">{loading ? "..." : inr(totalExpense)}</p>
+            <p className="text-xs text-red-800/80">{filtered.length} entries recorded</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Average Expense ({formatDateLabel()})</p>
+            <p className="mt-1.5 font-display text-2xl font-bold">
+              {loading ? "..." : inr(filtered.length ? totalExpense / filtered.length : 0)}
+            </p>
+            <p className="text-xs text-muted-foreground">Per entry average</p>
+          </Card>
+        </div>
 
-      {/* 1. Route Line Filter Selection */}
-      {lines.length > 0 && (
-        <Card className="p-3.5 space-y-2 bg-card border-border shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-foreground flex items-center gap-1.5">
-              <MapPin className="size-3.5 text-primary" /> Filter by Route Line:
-            </span>
-            {selectedLine !== "all" && (
-              <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => setSelectedLine("all")}>
-                Show All Lines
-              </Button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSelectedLine("all")}
-              className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
-                selectedLine === "all"
+        {/* 1. Route Line Filter Selection */}
+        {lines.length > 0 && (
+          <Card className="p-3.5 space-y-2 bg-card border-border shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wide text-foreground flex items-center gap-1.5">
+                <MapPin className="size-3.5 text-primary" /> Filter by Route Line:
+              </span>
+              {selectedLine !== "all" && (
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={() => setSelectedLine("all")}>
+                  Show All Lines
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedLine("all")}
+                className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${selectedLine === "all"
                   ? "bg-primary text-primary-foreground border-primary shadow-xs"
                   : "bg-background text-muted-foreground hover:text-foreground border-border"
-              }`}
-            >
-              All Lines ({expenses.length})
-            </button>
-            {lines.map((ln) => {
-              const isSelected = selectedLine === ln.public_id;
-              return (
-                <button
-                  key={ln.public_id}
-                  type="button"
-                  onClick={() => setSelectedLine(isSelected ? "all" : ln.public_id)}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
-                    isSelected
+                  }`}
+              >
+                All Lines ({expenses.length})
+              </button>
+              {lines.map((ln) => {
+                const isSelected = selectedLine === ln.public_id;
+                return (
+                  <button
+                    key={ln.public_id}
+                    type="button"
+                    onClick={() => setSelectedLine(isSelected ? "all" : ln.public_id)}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${isSelected
                       ? "bg-primary text-primary-foreground border-primary shadow-xs"
                       : "bg-background text-muted-foreground hover:text-foreground border-border"
-                  }`}
-                >
-                  <MapPin className={`size-3 ${isSelected ? "text-primary-foreground" : "text-primary"}`} />
-                  <span>{ln.name}</span>
-                </button>
-              );
-            })}
+                      }`}
+                  >
+                    <MapPin className={`size-3 ${isSelected ? "text-primary-foreground" : "text-primary"}`} />
+                    <span>{ln.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        {/* 2. Smart Weekly Collection Cycle Navigation Bar */}
+        <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Calendar className="size-4 text-primary" />
+              <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Weekly Expense Cycles</h3>
+              <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
+                {formatDateLabel()}
+              </Badge>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                size="sm"
+                variant={selectedCycleIndex !== null && weeklyCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
+                onClick={handlePresetCurrentWeek}
+                className="h-7 text-[11px] px-2.5 font-bold"
+              >
+                Current Week (Active)
+              </Button>
+              <Button size="sm" variant={dateFrom === today && dateTo === today ? "default" : "outline"} onClick={handlePresetToday} className="h-7 text-[11px] px-2.5">
+                Today
+              </Button>
+              <Button size="sm" variant="outline" onClick={handlePresetYesterday} className="h-7 text-[11px] px-2.5">
+                Yesterday
+              </Button>
+              <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5">
+                This Month
+              </Button>
+              <Button
+                size="sm"
+                variant={showCustomRange ? "secondary" : "outline"}
+                onClick={() => setShowCustomRange(!showCustomRange)}
+                className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
+              >
+                <SlidersHorizontal className="size-3" /> Custom Range
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleClearDates} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
+                <RefreshCw className="size-3 mr-1" /> Reset
+              </Button>
+            </div>
+          </div>
+
+          {/* Primary Cycle Navigation Control: Prev Arrow - Cycle Dropdown - Next Arrow */}
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handlePrevWeek}
+              disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
+              className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+              title="Previous Week Cycle"
+            >
+              <ChevronLeft className="size-4" /> <span className="hidden sm:inline">Prev Week</span>
+            </Button>
+
+            <div className="flex-1 min-w-[200px]">
+              <Select
+                value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
+                onValueChange={(val) => handleSelectCycle(Number(val))}
+              >
+                <SelectTrigger className="h-9 font-semibold text-xs sm:text-sm text-primary border-primary/40 bg-primary/5">
+                  <SelectValue placeholder="Select Expense Week Cycle..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {weeklyCycles.map((cycle) => (
+                    <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
+                      {cycle.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleNextWeek}
+              disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
+              className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
+              title="Next Week Cycle"
+            >
+              <span className="hidden sm:inline">Next Week</span> <ChevronRight className="size-4" />
+            </Button>
+          </div>
+
+          {/* Search & Collapsible Custom Range */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <Label className="text-[11px] font-semibold text-muted-foreground">Search Expenses</Label>
+              <div className="relative mt-1">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Category or notes…" className="pl-8 h-8 sm:h-9 text-xs" />
+              </div>
+            </div>
+            {showCustomRange && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value);
+                      setSelectedCycleIndex(null);
+                    }}
+                    className="mt-1 h-8 sm:h-9 text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => {
+                      setDateTo(e.target.value);
+                      setSelectedCycleIndex(null);
+                    }}
+                    className="mt-1 h-8 sm:h-9 text-xs"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </Card>
-      )}
 
-      {/* 2. Smart Weekly Collection Cycle Navigation Bar */}
-      <Card className="p-4 space-y-3 bg-card border-border/80 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Calendar className="size-4 text-primary" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Weekly Expense Cycles</h3>
-            <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
-              {formatDateLabel()}
-            </Badge>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              size="sm"
-              variant={selectedCycleIndex !== null && weeklyCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
-              onClick={handlePresetCurrentWeek}
-              className="h-7 text-[11px] px-2.5 font-bold"
-            >
-              Current Week (Active)
-            </Button>
-            <Button size="sm" variant={dateFrom === today && dateTo === today ? "default" : "outline"} onClick={handlePresetToday} className="h-7 text-[11px] px-2.5">
-              Today
-            </Button>
-            <Button size="sm" variant="outline" onClick={handlePresetYesterday} className="h-7 text-[11px] px-2.5">
-              Yesterday
-            </Button>
-            <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5">
-              This Month
-            </Button>
-            <Button
-              size="sm"
-              variant={showCustomRange ? "secondary" : "outline"}
-              onClick={() => setShowCustomRange(!showCustomRange)}
-              className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
-            >
-              <SlidersHorizontal className="size-3" /> Custom Range
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleClearDates} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
-              <RefreshCw className="size-3 mr-1" /> Reset
-            </Button>
-          </div>
-        </div>
-
-        {/* Primary Cycle Navigation Control: Prev Arrow - Cycle Dropdown - Next Arrow */}
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handlePrevWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
-            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
-            title="Previous Week Cycle"
-          >
-            <ChevronLeft className="size-4" /> <span className="hidden sm:inline">Prev Week</span>
-          </Button>
-
-          <div className="flex-1 min-w-[200px]">
-            <Select
-              value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
-              onValueChange={(val) => handleSelectCycle(Number(val))}
-            >
-              <SelectTrigger className="h-9 font-semibold text-xs sm:text-sm text-primary border-primary/40 bg-primary/5">
-                <SelectValue placeholder="Select Expense Week Cycle..." />
-              </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {weeklyCycles.map((cycle) => (
-                  <SelectItem key={cycle.index} value={String(cycle.index)} className="text-xs font-medium">
-                    {cycle.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleNextWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
-            className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
-            title="Next Week Cycle"
-          >
-            <span className="hidden sm:inline">Next Week</span> <ChevronRight className="size-4" />
-          </Button>
-        </div>
-
-        {/* Search & Collapsible Custom Range */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <div>
-            <Label className="text-[11px] font-semibold text-muted-foreground">Search Expenses</Label>
-            <div className="relative mt-1">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Category or notes…" className="pl-8 h-8 sm:h-9 text-xs" />
+        <Card>
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold">Expense Register</h3>
+              <span className="text-xs text-muted-foreground">({filtered.length} entries)</span>
             </div>
+            <AddExpenseModal
+              open={isModalOpen}
+              setOpen={setIsModalOpen}
+              onSuccess={loadExpenses}
+              defaultExpenseDate={dateFrom || today}
+              lines={lines}
+              defaultLineId={selectedLine !== "all" ? selectedLine : ""}
+            />
           </div>
-          {showCustomRange && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-[11px] font-semibold text-muted-foreground">From Date</Label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setSelectedCycleIndex(null);
-                  }}
-                  className="mt-1 h-8 sm:h-9 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-[11px] font-semibold text-muted-foreground">To Date</Label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setSelectedCycleIndex(null);
-                  }}
-                  className="mt-1 h-8 sm:h-9 text-xs"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
 
-      <Card>
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold">Expense Register</h3>
-            <span className="text-xs text-muted-foreground">({filtered.length} entries)</span>
-          </div>
-          <AddExpenseModal
-            open={isModalOpen}
-            setOpen={setIsModalOpen}
-            onSuccess={loadExpenses}
-            defaultExpenseDate={dateFrom || today}
-            lines={lines}
-            defaultLineId={selectedLine !== "all" ? selectedLine : ""}
-          />
-        </div>
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Route Line</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Payment Mode</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableSkeletonRows rows={4} columns={6} />
-              ) : filtered.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
-                    No expense entries recorded for this filter. Click "Add Expense" to log your operational expense.
-                  </TableCell>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Route Line</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Payment Mode</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
-              ) : (
-                filtered.map((e: any) => (
-                  <TableRow key={e.public_id}>
-                    <TableCell className="text-xs font-mono font-medium">{e.expense_date}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{e.category_name || "General"}</Badge>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableSkeletonRows rows={4} columns={6} />
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
+                      No expense entries recorded for this filter. Click "Add Expense" to log your operational expense.
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {e.line_name ? (
-                        <Badge variant="secondary" className="gap-1 text-[10px]">
-                          <MapPin className="size-3 text-primary" /> {e.line_name}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground italic">General</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm font-medium">{e.description || "-"}</TableCell>
-                    <TableCell className="text-xs font-medium">
-                      <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold">
-                        {e.payment_mode_name || "Cash"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-bold">{inr(e.amount)}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-    </div>
-  </FeaturePaywallGuard>
+                ) : (
+                  filtered.map((e: any) => (
+                    <TableRow key={e.public_id}>
+                      <TableCell className="text-xs font-mono font-medium">{e.expense_date}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{e.category_name || "General"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {e.line_name ? (
+                          <Badge variant="secondary" className="gap-1 text-[10px]">
+                            <MapPin className="size-3 text-primary" /> {e.line_name}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground italic">General</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{e.description || "-"}</TableCell>
+                      <TableCell className="text-xs font-medium">
+                        <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold">
+                          {e.payment_mode_name || "Cash"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-bold">{inr(e.amount)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      </div>
+    </FeaturePaywallGuard>
   );
 }
 

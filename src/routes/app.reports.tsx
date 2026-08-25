@@ -624,709 +624,706 @@ function ReportsPage() {
   return (
     <FeaturePaywallGuard module="reports">
       <div className="space-y-6 pb-12">
-      <GuestPlanUsage />
-      <SubscriptionExpiryBanner />
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl font-bold tracking-tight">Business Reports & Net Cash Flow</h2>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Track daily collections, route day breakdowns, and net revenue after deducting operational expenses.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="size-4 mr-1.5" /> Print Statement
-          </Button>
-          <Button size="sm" onClick={() => handleExportCsv("summary")} className="bg-primary text-primary-foreground font-semibold">
-            <Download className="size-4 mr-1.5" /> Export Summary CSV
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => guestWorkspaceService.downloadFullDataBackup()}
-            className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-300 font-semibold dark:bg-blue-950 dark:text-blue-300"
-            title="Download complete JSON backup of all customers, loans, collections & expenses"
-          >
-            <Download className="size-4 mr-1.5" /> Full Data Backup (JSON)
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExportReportImage}
-            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-semibold dark:bg-emerald-950 dark:text-emerald-300"
-          >
-            <ImageIcon className="size-4 mr-1.5" /> Report Image
-          </Button>
-        </div>
-      </div>
-
-      {/* Unified Filter Dashboard Bar */}
-      <Card className="p-4 bg-card border-border/80 shadow-xs space-y-3.5">
-        {/* Top Bar: Quick Time Presets & Active Range Badge */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/50 pb-3">
-          <div className="flex items-center gap-2">
-            <Filter className="size-4 text-primary" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Report Filters</h3>
-            <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
-              {isAllTimeSelected
-                ? "🌐 All-Time Summary"
-                : dateFrom === dateTo
-                ? dateFrom === today
-                  ? "Today"
-                  : dateFrom
-                : `${dateFrom || "Start"} → ${dateTo || "End"}`}
-            </Badge>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              size="sm"
-              variant={isAllTimeSelected ? "default" : "outline"}
-              onClick={handlePresetAllTime}
-              className={`h-7 text-[11px] px-2.5 font-bold ${
-                isAllTimeSelected ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : ""
-              }`}
-            >
-              🌐 All-Time Totals
-            </Button>
-            <Button
-              size="sm"
-              variant={!isAllTimeSelected && dateFrom === today && dateTo === today ? "default" : "outline"}
-              onClick={handlePresetToday}
-              className="h-7 text-[11px] px-2.5 font-semibold"
-            >
-              Today
-            </Button>
-            <Button
-              size="sm"
-              variant={!isAllTimeSelected && selectedCycleIndex !== null && fullWeekCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
-              onClick={handlePresetCurrentWeek}
-              className="h-7 text-[11px] px-2.5 font-semibold"
-            >
-              Current Week
-            </Button>
-            <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5 font-semibold">
-              This Month
-            </Button>
-            <Button
-              size="sm"
-              variant={showCustomRange ? "secondary" : "outline"}
-              onClick={() => {
-                setIsAllTimeSelected(false);
-                setShowCustomRange(!showCustomRange);
-              }}
-              className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
-            >
-              <SlidersHorizontal className="size-3" /> Custom Range
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleClearFilters} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
-              <RefreshCw className="size-3 mr-1" /> Reset
-            </Button>
-          </div>
-        </div>
-
-        {/* Collapsible Custom Date & Financial Week Picker */}
-        {showCustomRange && (
-          <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Calendar className="size-3.5 text-primary" /> Select Specific Week Cycle or Custom Dates:
-              </span>
-              {selectedCycleIndex !== null && (
-                <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
-                  Week {selectedCycleIndex} Selected
-                </Badge>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Week-Wise Selector */}
-              <div>
-                <Label className="text-[11px] font-bold text-foreground">Financial Week Cycle</Label>
-                <Select
-                  value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
-                  onValueChange={(val) => {
-                    const idx = Number(val);
-                    handleSelectCycle(idx);
-                  }}
-                >
-                  <SelectTrigger className="mt-1 h-8.5 text-xs bg-background font-semibold text-primary border-primary/30">
-                    <SelectValue placeholder="Select Week (e.g. Week 1)..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {fullWeekCycles.map((c) => (
-                      <SelectItem key={c.index} value={String(c.index)} className="text-xs font-medium">
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* From Date */}
-              <div>
-                <Label className="text-[11px] font-bold text-foreground">From Date</Label>
-                <Input
-                  type="date"
-                  className="mt-1 h-8.5 text-xs font-mono bg-background"
-                  value={dateFrom}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setSelectedCycleIndex(null);
-                    setIsAllTimeSelected(false);
-                  }}
-                />
-              </div>
-
-              {/* To Date */}
-              <div>
-                <Label className="text-[11px] font-bold text-foreground">To Date</Label>
-                <Input
-                  type="date"
-                  className="mt-1 h-8.5 text-xs font-mono bg-background"
-                  value={dateTo}
-                  onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setSelectedCycleIndex(null);
-                    setIsAllTimeSelected(false);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3-Column Interactive Filter Bar: Route Line, Day Pills, Search */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          {/* Column 1: Route Line Dropdown */}
-          <div className="space-y-1">
-            <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-              <MapPin className="size-3 text-primary" /> Route Line
-            </Label>
-            <Select value={selectedLine} onValueChange={setSelectedLine}>
-              <SelectTrigger className="h-8.5 text-xs bg-background">
-                <SelectValue placeholder="Select Route Line..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs font-bold">All Route Lines</SelectItem>
-                {lines.map((ln) => (
-                  <SelectItem key={ln.public_id} value={ln.public_id} className="text-xs">
-                    {ln.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Column 2: Route Days Multi-Select Filter */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                <Calendar className="size-3 text-primary" /> Days of Week
-              </Label>
-              {!selectedDays.includes("all") && (
-                <span className="text-[10px] text-primary font-bold">
-                  {selectedDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(" + ")}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {dynamicDaysList.map((d) => {
-                const isSelected = selectedDays.includes(d.key);
-                return (
-                  <button
-                    key={d.key}
-                    type="button"
-                    onClick={() => toggleDayFilter(d.key)}
-                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md border transition-all ${
-                      isSelected
-                        ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                        : "bg-background text-muted-foreground hover:text-foreground border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    {isSelected && d.key !== "all" ? "✓ " : ""}{d.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Column 3: Search Bar */}
-          <div className="space-y-1">
-            <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-              <Search className="size-3 text-primary" /> Search Records
-            </Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search borrower name, code, receipt..."
-                className="pl-8 h-8.5 text-xs bg-background"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground font-bold"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* 3. Master Cash & Portfolio Financial Ledger Position Card */}
-      <Card className="p-4.5 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-blue-500/15 border-emerald-500/30 dark:border-emerald-500/40 shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/20 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-600 text-white font-bold shadow-xs">
-              <Wallet className="size-6" />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-extrabold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
-                <span>MASTER CASH & PORTFOLIO FINANCIAL POSITION</span>
-                <Badge variant="outline" className="text-[10px] font-mono bg-emerald-600 text-white border-none font-bold">
-                  Includes Starting Float Cash
-                </Badge>
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Actual Cash in Hand = (Starting Float + Installment Collections) − (Loan Disbursements + Expenses)
-              </p>
-            </div>
-          </div>
-          <div className="text-left sm:text-right">
-            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
-              {inr(masterActualCashInHand)}
+        {/* <GuestPlanUsage /> */}
+        <SubscriptionExpiryBanner />
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="font-display text-2xl font-bold tracking-tight">Business Reports & Net Cash Flow</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Track daily collections, route day breakdowns, and net revenue after deducting operational expenses.
             </p>
-            <p className="text-[11px] text-muted-foreground font-semibold">Actual Physical Cash in Hand</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer className="size-4 mr-1.5" /> Print Statement
+            </Button>
+            <Button size="sm" onClick={() => handleExportCsv("summary")} className="bg-primary text-primary-foreground font-semibold">
+              <Download className="size-4 mr-1.5" /> Export Summary CSV
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => guestWorkspaceService.downloadFullDataBackup()}
+              className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-300 font-semibold dark:bg-blue-950 dark:text-blue-300"
+              title="Download complete JSON backup of all customers, loans, collections & expenses"
+            >
+              <Download className="size-4 mr-1.5" /> Full Data Backup (JSON)
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportReportImage}
+              className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300 font-semibold dark:bg-emerald-950 dark:text-emerald-300"
+            >
+              <ImageIcon className="size-4 mr-1.5" /> Report Image
+            </Button>
           </div>
         </div>
 
-        {/* 6 Comprehensive Financial Breakdown Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs pt-0.5">
-          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
-            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Starting Float Cash</span>
-            <span className="font-mono font-extrabold text-blue-700 dark:text-blue-300 text-sm">+{inr(masterStartingFloat)}</span>
-            <span className="text-[10px] text-blue-600 block italic">Total Injected Capital</span>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
-            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Given to Borrowers</span>
-            <span className="font-mono font-extrabold text-purple-700 dark:text-purple-300 text-sm">−{inr(totalDisbursedAmount)}</span>
-            <span className="text-[10px] text-purple-600 block font-medium">{filteredDisbursements.length} Loans Disbursed</span>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
-            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Installments Collected</span>
-            <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">+{inr(grossCollections)}</span>
-            <span className="text-[10px] text-emerald-600 block font-medium">{filteredCollections.length} Receipts</span>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
-            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Expenses Deducted</span>
-            <span className="font-mono font-extrabold text-rose-700 dark:text-rose-300 text-sm">−{inr(totalExpenses)}</span>
-            <span className="text-[10px] text-rose-600 block font-medium">{filteredExpenses.length} Vouchers</span>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
-            <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Remaining Pending Due</span>
-            <span className="font-mono font-extrabold text-amber-700 dark:text-amber-300 text-sm">{inr(totalPendingBalance)}</span>
-            <span className="text-[10px] text-amber-600 block font-medium">Uncollected Balance</span>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-0.5">
-            <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold block uppercase tracking-wider">Actual Cash In Hand</span>
-            <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">
-              {inr(masterActualCashInHand)}
-            </span>
-            <span className="text-[10px] text-emerald-600 block font-bold">Reconciled Float</span>
-          </div>
-        </div>
-      </Card>
-
-      {/* Top Metric Cards (Collections, Expenses, Net Revenue) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="p-4 bg-emerald-500/10 border-emerald-500/20 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-800">Gross Collections</span>
-            <div className="p-1.5 rounded-full bg-emerald-600/15 text-emerald-700">
-              <ArrowUpRight className="size-4" />
-            </div>
-          </div>
-          <p className="text-xl font-bold font-mono text-emerald-800">{inr(grossCollections)}</p>
-          <p className="text-[11px] text-emerald-700/80 font-medium">{filteredCollections.length} Payment Receipts</p>
-        </Card>
-
-        <Card className="p-4 bg-red-500/10 border-red-500/20 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-red-800">Expenses Deducted</span>
-            <div className="p-1.5 rounded-full bg-red-600/15 text-red-700">
-              <ArrowDownRight className="size-4" />
-            </div>
-          </div>
-          <p className="text-xl font-bold font-mono text-red-800">{inr(totalExpenses)}</p>
-          <p className="text-[11px] text-red-700/80 font-medium">{filteredExpenses.length} Expense Vouchers</p>
-        </Card>
-
-        <Card className="p-4 bg-primary/10 border-primary/20 space-y-1 col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-primary">Net Collection (In Hand)</span>
-            <div className="p-1.5 rounded-full bg-primary/15 text-primary">
-              <Wallet className="size-4" />
-            </div>
-          </div>
-          <p className={`text-xl font-bold font-mono ${netCollections >= 0 ? "text-primary" : "text-red-600"}`}>
-            {inr(netCollections)}
-          </p>
-          <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-            <Badge variant="outline" className="text-[10px] font-mono bg-background">
-              {netMarginPct}% Margin
-            </Badge>
-            <span>After Expenses</span>
-          </div>
-        </Card>
-
-        <Card className="p-4 bg-muted/50 border-border/80 space-y-1 col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground">Total Activity</span>
-            <div className="p-1.5 rounded-full bg-foreground/10 text-foreground">
-              <FileText className="size-4" />
-            </div>
-          </div>
-          <p className="text-xl font-bold font-mono text-foreground">
-            {filteredCollections.length + filteredExpenses.length} Records
-          </p>
-          <p className="text-[11px] text-muted-foreground font-medium">Combined Transactions</p>
-        </Card>
-      </div>
-
-      {/* Main Tabs Container */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex w-full sm:w-auto overflow-x-auto p-1 bg-muted/60 justify-start gap-1 rounded-xl">
-          <TabsTrigger value="summary" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
-            <span className="hidden sm:inline">Weekly Net Summary (Deducting Expenses)</span>
-            <span className="sm:hidden">Weekly Net Summary</span>
-          </TabsTrigger>
-          <TabsTrigger value="collections" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
-            <span className="hidden sm:inline">Collection Receipts ({filteredCollections.length})</span>
-            <span className="sm:hidden">Collections ({filteredCollections.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="disbursements" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold text-purple-700 dark:text-purple-300">
-            <span className="hidden sm:inline">Loan Disbursements / Borrower Given Amount ({filteredDisbursements.length})</span>
-            <span className="sm:hidden">Disbursements ({filteredDisbursements.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="expenses" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
-            <span className="hidden sm:inline">Expense Vouchers ({filteredExpenses.length})</span>
-            <span className="sm:hidden">Expenses ({filteredExpenses.length})</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab 1: Weekly Collection Cycle Breakdown Table */}
-        <TabsContent value="summary">
-          <Card className="p-4 space-y-3 border-border/80">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
-              <div>
-                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                  <Calendar className="size-4 text-primary" /> Weekly Collections & Expense Deduction Breakdown
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Financial week cycle breakdown showing gross collected amounts minus operational expenses for each week.
-                </p>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => handleExportCsv("summary")} className="h-8 text-xs">
-                <Download className="size-3.5 mr-1" /> Export CSV
-              </Button>
-            </div>
-
-            {loading ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Loading summary report...</p>
-            ) : weeklySummaries.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No collections or expenses found matching selected filters.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 text-xs">
-                      <TableHead className="py-2.5 font-bold">Week Cycle & Date Range</TableHead>
-                      <TableHead className="py-2.5 font-bold text-right">Gross Collections</TableHead>
-                      <TableHead className="py-2.5 font-bold text-right">Expenses Deducted</TableHead>
-                      <TableHead className="py-2.5 font-bold text-right">Net Cash Collected</TableHead>
-                      <TableHead className="py-2.5 font-bold text-center">Receipts & Vouchers</TableHead>
-                      <TableHead className="py-2.5 font-bold text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {weeklySummaries.map((row) => (
-                      <TableRow key={row.cycleIndex} className="text-xs hover:bg-muted/30">
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-bold text-foreground text-xs">{row.label}</span>
-                            {row.isCurrent ? (
-                              <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/30">
-                                ★ Current Week
-                              </Badge>
-                            ) : row.isFuture ? (
-                              <Badge variant="outline" className="text-[10px] font-normal bg-muted text-muted-foreground border-border">
-                                Upcoming
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
-                                ✅ Completed Cycle
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 text-right font-mono font-bold text-emerald-700">
-                          {inr(row.grossCollected)}
-                        </TableCell>
-                        <TableCell className="py-3 text-right font-mono font-semibold text-rose-600">
-                          {row.totalExpenses > 0 ? `- ${inr(row.totalExpenses)}` : "₹0"}
-                        </TableCell>
-                        <TableCell className={`py-3 text-right font-mono font-bold text-sm ${row.netCollection >= 0 ? "text-primary" : "text-rose-700"}`}>
-                          {inr(row.netCollection)}
-                        </TableCell>
-                        <TableCell className="py-3 text-center font-mono">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted text-[11px] font-medium text-foreground">
-                            {row.collectionCount} Collections • {row.expenseCount} Expenses
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3 text-center">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs px-2.5 bg-primary/5 hover:bg-primary/15 text-primary border-primary/20 font-semibold"
-                            onClick={() => {
-                              setViewingCycle(row);
-                            }}
-                          >
-                            <Eye className="size-3.5 mr-1" /> View Week Breakdown
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* Tab 2: Detailed Collections Register */}
-        <TabsContent value="collections">
-          <Card className="p-4 space-y-3 border-border/80">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="font-bold text-sm text-foreground">Collection Receipts Register</h3>
-                <p className="text-xs text-muted-foreground">List of all borrower payment receipts.</p>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => handleExportCsv("collection")} className="h-8 text-xs">
-                <Download className="size-3.5 mr-1" /> Export Collections CSV
-              </Button>
-            </div>
-
-            {loading ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Loading receipts...</p>
-            ) : filteredCollections.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No collection records found.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 text-xs">
-                      <TableHead className="py-2.5">Receipt #</TableHead>
-                      <TableHead className="py-2.5">Date</TableHead>
-                      <TableHead className="py-2.5">Borrower Code</TableHead>
-                      <TableHead className="py-2.5">Borrower Name</TableHead>
-                      <TableHead className="py-2.5 text-right">Amount Collected</TableHead>
-                      <TableHead className="py-2.5">Payment Mode</TableHead>
-                      <TableHead className="py-2.5">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCollections.map((c) => (
-                      <TableRow key={c.public_id} className="text-xs">
-                        <TableCell className="font-mono font-semibold py-2.5">{c.receipt_number}</TableCell>
-                        <TableCell className="font-mono text-[11px] py-2.5">{c.collection_date}</TableCell>
-                        <TableCell className="font-mono py-2.5">{c.customer_code}</TableCell>
-                        <TableCell className="font-semibold py-2.5">{c.customer_name}</TableCell>
-                        <TableCell className="font-mono font-bold text-emerald-700 text-right py-2.5">
-                          {inr(Number(c.collected_amount || 0))}
-                        </TableCell>
-                        <TableCell className="capitalize py-2.5">{c.payment_mode_name || "Cash"}</TableCell>
-                        <TableCell className="py-2.5">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-600 text-white">
-                            <CheckCircle2 className="size-3" /> {c.status_name || "Paid"}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3: Loan Disbursements / Borrower Given Amount */}
-        <TabsContent value="disbursements">
-          <Card className="p-4 space-y-4 border-border/80">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
-              <div>
-                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                  <Users className="size-4 text-purple-600" /> Borrower Loan Disbursements (Given Amount from Route Start)
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Complete register of actual physical cash handed out to borrowers when loans were issued.
-                </p>
-              </div>
-              <Badge variant="outline" className="font-mono font-bold text-xs bg-purple-500/10 text-purple-700 border-purple-500/30 px-3 py-1">
-                Total Given: {inr(totalDisbursedAmount)}
+        {/* Unified Filter Dashboard Bar */}
+        <Card className="p-4 bg-card border-border/80 shadow-xs space-y-3.5">
+          {/* Top Bar: Quick Time Presets & Active Range Badge */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/50 pb-3">
+            <div className="flex items-center gap-2">
+              <Filter className="size-4 text-primary" />
+              <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Report Filters</h3>
+              <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
+                {isAllTimeSelected
+                  ? "🌐 All-Time Summary"
+                  : dateFrom === dateTo
+                    ? dateFrom === today
+                      ? "Today"
+                      : dateFrom
+                    : `${dateFrom || "Start"} → ${dateTo || "End"}`}
               </Badge>
             </div>
 
-            {loading ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Loading disbursement records...</p>
-            ) : filteredDisbursements.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No borrower loan disbursements found matching selected filters.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 text-xs">
-                      <TableHead className="py-2.5 font-bold">Borrower Code & Name</TableHead>
-                      <TableHead className="py-2.5 font-bold">Disbursement Date</TableHead>
-                      <TableHead className="py-2.5 font-bold">Route Line / Day</TableHead>
-                      <TableHead className="py-2.5 font-bold text-right">Principal Loan</TableHead>
-                      <TableHead className="py-2.5 font-bold text-right text-purple-700 dark:text-purple-300">Amount Given (Handed Out)</TableHead>
-                      <TableHead className="py-2.5 font-bold text-center">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredDisbursements.map((c) => (
-                      <TableRow key={c.public_id} className="text-xs hover:bg-muted/30">
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                              {c.customer_code}
-                            </span>
-                            <span className="font-bold text-foreground">{c.full_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 font-mono text-xs">
-                          {c.start_date ? String(c.start_date).slice(0, 10) : "-"}
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium text-xs">{(c as any).line_name || c.line || "General Workspace"}</span>
-                            {c.collection_day && (
-                              <Badge variant="outline" className="text-[10px] capitalize bg-muted font-normal">
-                                {c.collection_day}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 text-right font-mono text-foreground font-semibold">
-                          {inr(Number(c.loan_amount || 0))}
-                        </TableCell>
-                        <TableCell className="py-3 text-right font-mono font-bold text-purple-700 dark:text-purple-300 text-sm">
-                          {inr(Number(c.disbursed_amount || c.loan_amount || 0))}
-                        </TableCell>
-                        <TableCell className="py-3 text-center">
-                          <Badge variant="outline" className={`text-[10px] capitalize font-bold ${
-                            c.status === "active" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30" : "bg-muted text-muted-foreground"
-                          }`}>
-                            {c.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* Tab 4: Detailed Expense Vouchers */}
-        <TabsContent value="expenses">
-          <Card className="p-4 space-y-3 border-border/80">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="font-bold text-sm text-foreground">Operational Expense Vouchers</h3>
-                <p className="text-xs text-muted-foreground">List of all operational expenses deducted from route collections.</p>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => handleExportCsv("expense")} className="h-8 text-xs">
-                <Download className="size-3.5 mr-1" /> Export Expenses CSV
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                size="sm"
+                variant={isAllTimeSelected ? "default" : "outline"}
+                onClick={handlePresetAllTime}
+                className={`h-7 text-[11px] px-2.5 font-bold ${isAllTimeSelected ? "bg-purple-600 hover:bg-purple-700 text-white shadow-xs" : ""
+                  }`}
+              >
+                🌐 All-Time Totals
+              </Button>
+              <Button
+                size="sm"
+                variant={!isAllTimeSelected && dateFrom === today && dateTo === today ? "default" : "outline"}
+                onClick={handlePresetToday}
+                className="h-7 text-[11px] px-2.5 font-semibold"
+              >
+                Today
+              </Button>
+              <Button
+                size="sm"
+                variant={!isAllTimeSelected && selectedCycleIndex !== null && fullWeekCycles.find((c) => c.index === selectedCycleIndex)?.isCurrent ? "default" : "outline"}
+                onClick={handlePresetCurrentWeek}
+                className="h-7 text-[11px] px-2.5 font-semibold"
+              >
+                Current Week
+              </Button>
+              <Button size="sm" variant="outline" onClick={handlePresetThisMonth} className="h-7 text-[11px] px-2.5 font-semibold">
+                This Month
+              </Button>
+              <Button
+                size="sm"
+                variant={showCustomRange ? "secondary" : "outline"}
+                onClick={() => {
+                  setIsAllTimeSelected(false);
+                  setShowCustomRange(!showCustomRange);
+                }}
+                className="h-7 text-[11px] px-2.5 gap-1 font-semibold"
+              >
+                <SlidersHorizontal className="size-3" /> Custom Range
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleClearFilters} className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground">
+                <RefreshCw className="size-3 mr-1" /> Reset
               </Button>
             </div>
+          </div>
 
-            {loading ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Loading expense vouchers...</p>
-            ) : filteredExpenses.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No expense records found.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 text-xs">
-                      <TableHead className="py-2.5">Date</TableHead>
-                      <TableHead className="py-2.5">Category</TableHead>
-                      <TableHead className="py-2.5">Description / Notes</TableHead>
-                      <TableHead className="py-2.5 text-right">Amount (₹)</TableHead>
-                      <TableHead className="py-2.5">Payment Mode</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredExpenses.map((e) => (
-                      <TableRow key={e.public_id} className="text-xs">
-                        <TableCell className="font-mono text-[11px] py-2.5">{e.expense_date}</TableCell>
-                        <TableCell className="font-semibold py-2.5">
-                          <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-700 border-red-500/20">
-                            {e.category_name || "General"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2.5 text-muted-foreground">{e.description || "N/A"}</TableCell>
-                        <TableCell className="font-mono font-bold text-red-600 text-right py-2.5">
-                          - {inr(Number(e.amount || 0))}
-                        </TableCell>
-                        <TableCell className="capitalize py-2.5">{e.payment_mode_name || "Cash"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          {/* Collapsible Custom Date & Financial Week Picker */}
+          {showCustomRange && (
+            <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-primary" /> Select Specific Week Cycle or Custom Dates:
+                </span>
+                {selectedCycleIndex !== null && (
+                  <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20 font-bold">
+                    Week {selectedCycleIndex} Selected
+                  </Badge>
+                )}
               </div>
-            )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Week-Wise Selector */}
+                <div>
+                  <Label className="text-[11px] font-bold text-foreground">Financial Week Cycle</Label>
+                  <Select
+                    value={selectedCycleIndex !== null ? String(selectedCycleIndex) : ""}
+                    onValueChange={(val) => {
+                      const idx = Number(val);
+                      handleSelectCycle(idx);
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 h-8.5 text-xs bg-background font-semibold text-primary border-primary/30">
+                      <SelectValue placeholder="Select Week (e.g. Week 1)..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {fullWeekCycles.map((c) => (
+                        <SelectItem key={c.index} value={String(c.index)} className="text-xs font-medium">
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* From Date */}
+                <div>
+                  <Label className="text-[11px] font-bold text-foreground">From Date</Label>
+                  <Input
+                    type="date"
+                    className="mt-1 h-8.5 text-xs font-mono bg-background"
+                    value={dateFrom}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value);
+                      setSelectedCycleIndex(null);
+                      setIsAllTimeSelected(false);
+                    }}
+                  />
+                </div>
+
+                {/* To Date */}
+                <div>
+                  <Label className="text-[11px] font-bold text-foreground">To Date</Label>
+                  <Input
+                    type="date"
+                    className="mt-1 h-8.5 text-xs font-mono bg-background"
+                    value={dateTo}
+                    onChange={(e) => {
+                      setDateTo(e.target.value);
+                      setSelectedCycleIndex(null);
+                      setIsAllTimeSelected(false);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3-Column Interactive Filter Bar: Route Line, Day Pills, Search */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            {/* Column 1: Route Line Dropdown */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                <MapPin className="size-3 text-primary" /> Route Line
+              </Label>
+              <Select value={selectedLine} onValueChange={setSelectedLine}>
+                <SelectTrigger className="h-8.5 text-xs bg-background">
+                  <SelectValue placeholder="Select Route Line..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs font-bold">All Route Lines</SelectItem>
+                  {lines.map((ln) => (
+                    <SelectItem key={ln.public_id} value={ln.public_id} className="text-xs">
+                      {ln.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Column 2: Route Days Multi-Select Filter */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                  <Calendar className="size-3 text-primary" /> Days of Week
+                </Label>
+                {!selectedDays.includes("all") && (
+                  <span className="text-[10px] text-primary font-bold">
+                    {selectedDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(" + ")}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {dynamicDaysList.map((d) => {
+                  const isSelected = selectedDays.includes(d.key);
+                  return (
+                    <button
+                      key={d.key}
+                      type="button"
+                      onClick={() => toggleDayFilter(d.key)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-md border transition-all ${isSelected
+                        ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                        : "bg-background text-muted-foreground hover:text-foreground border-border hover:bg-muted/50"
+                        }`}
+                    >
+                      {isSelected && d.key !== "all" ? "✓ " : ""}{d.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Column 3: Search Bar */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                <Search className="size-3 text-primary" /> Search Records
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search borrower name, code, receipt..."
+                  className="pl-8 h-8.5 text-xs bg-background"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* 3. Master Cash & Portfolio Financial Ledger Position Card */}
+        <Card className="p-4.5 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-blue-500/15 border-emerald-500/30 dark:border-emerald-500/40 shadow-xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/20 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-600 text-white font-bold shadow-xs">
+                <Wallet className="size-6" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
+                  <span>MASTER CASH & PORTFOLIO FINANCIAL POSITION</span>
+                  <Badge variant="outline" className="text-[10px] font-mono bg-emerald-600 text-white border-none font-bold">
+                    Includes Starting Float Cash
+                  </Badge>
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Actual Cash in Hand = (Starting Float + Installment Collections) − (Loan Disbursements + Expenses)
+                </p>
+              </div>
+            </div>
+            <div className="text-left sm:text-right">
+              <p className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-300">
+                {inr(masterActualCashInHand)}
+              </p>
+              <p className="text-[11px] text-muted-foreground font-semibold">Actual Physical Cash in Hand</p>
+            </div>
+          </div>
+
+          {/* 6 Comprehensive Financial Breakdown Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs pt-0.5">
+            <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+              <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Starting Float Cash</span>
+              <span className="font-mono font-extrabold text-blue-700 dark:text-blue-300 text-sm">+{inr(masterStartingFloat)}</span>
+              <span className="text-[10px] text-blue-600 block italic">Total Injected Capital</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+              <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Given to Borrowers</span>
+              <span className="font-mono font-extrabold text-purple-700 dark:text-purple-300 text-sm">−{inr(totalDisbursedAmount)}</span>
+              <span className="text-[10px] text-purple-600 block font-medium">{filteredDisbursements.length} Loans Disbursed</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+              <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Installments Collected</span>
+              <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">+{inr(grossCollections)}</span>
+              <span className="text-[10px] text-emerald-600 block font-medium">{filteredCollections.length} Receipts</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+              <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Expenses Deducted</span>
+              <span className="font-mono font-extrabold text-rose-700 dark:text-rose-300 text-sm">−{inr(totalExpenses)}</span>
+              <span className="text-[10px] text-rose-600 block font-medium">{filteredExpenses.length} Vouchers</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 space-y-0.5">
+              <span className="text-[10px] text-muted-foreground font-bold block uppercase tracking-wider">Remaining Pending Due</span>
+              <span className="font-mono font-extrabold text-amber-700 dark:text-amber-300 text-sm">{inr(totalPendingBalance)}</span>
+              <span className="text-[10px] text-amber-600 block font-medium">Uncollected Balance</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-0.5">
+              <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold block uppercase tracking-wider">Actual Cash In Hand</span>
+              <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">
+                {inr(masterActualCashInHand)}
+              </span>
+              <span className="text-[10px] text-emerald-600 block font-bold">Reconciled Float</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Top Metric Cards (Collections, Expenses, Net Revenue) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="p-4 bg-emerald-500/10 border-emerald-500/20 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-emerald-800">Gross Collections</span>
+              <div className="p-1.5 rounded-full bg-emerald-600/15 text-emerald-700">
+                <ArrowUpRight className="size-4" />
+              </div>
+            </div>
+            <p className="text-xl font-bold font-mono text-emerald-800">{inr(grossCollections)}</p>
+            <p className="text-[11px] text-emerald-700/80 font-medium">{filteredCollections.length} Payment Receipts</p>
           </Card>
-        </TabsContent>
-      </Tabs>
 
-      <DailyBreakdownModal
-        dateKey={viewingSummaryDate}
-        open={Boolean(viewingSummaryDate)}
-        setOpen={(v) => {
-          if (!v) setViewingSummaryDate(null);
-        }}
-        collections={collections}
-        expenses={expenses}
-        customers={customers}
-      />
+          <Card className="p-4 bg-red-500/10 border-red-500/20 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-red-800">Expenses Deducted</span>
+              <div className="p-1.5 rounded-full bg-red-600/15 text-red-700">
+                <ArrowDownRight className="size-4" />
+              </div>
+            </div>
+            <p className="text-xl font-bold font-mono text-red-800">{inr(totalExpenses)}</p>
+            <p className="text-[11px] text-red-700/80 font-medium">{filteredExpenses.length} Expense Vouchers</p>
+          </Card>
 
-      {/* Weekly Breakdown Detail Modal */}
-      <WeeklyBreakdownModal
-        cycle={viewingCycle}
-        open={!!viewingCycle}
-        setOpen={(v) => { if (!v) setViewingCycle(null); }}
-        collections={collections}
-        expenses={expenses}
-        customers={customers}
-      />
-    </div>
-  </FeaturePaywallGuard>
+          <Card className="p-4 bg-primary/10 border-primary/20 space-y-1 col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-primary">Net Collection (In Hand)</span>
+              <div className="p-1.5 rounded-full bg-primary/15 text-primary">
+                <Wallet className="size-4" />
+              </div>
+            </div>
+            <p className={`text-xl font-bold font-mono ${netCollections >= 0 ? "text-primary" : "text-red-600"}`}>
+              {inr(netCollections)}
+            </p>
+            <div className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <Badge variant="outline" className="text-[10px] font-mono bg-background">
+                {netMarginPct}% Margin
+              </Badge>
+              <span>After Expenses</span>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-muted/50 border-border/80 space-y-1 col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Total Activity</span>
+              <div className="p-1.5 rounded-full bg-foreground/10 text-foreground">
+                <FileText className="size-4" />
+              </div>
+            </div>
+            <p className="text-xl font-bold font-mono text-foreground">
+              {filteredCollections.length + filteredExpenses.length} Records
+            </p>
+            <p className="text-[11px] text-muted-foreground font-medium">Combined Transactions</p>
+          </Card>
+        </div>
+
+        {/* Main Tabs Container */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="flex w-full sm:w-auto overflow-x-auto p-1 bg-muted/60 justify-start gap-1 rounded-xl">
+            <TabsTrigger value="summary" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
+              <span className="hidden sm:inline">Weekly Net Summary (Deducting Expenses)</span>
+              <span className="sm:hidden">Weekly Net Summary</span>
+            </TabsTrigger>
+            <TabsTrigger value="collections" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
+              <span className="hidden sm:inline">Collection Receipts ({filteredCollections.length})</span>
+              <span className="sm:hidden">Collections ({filteredCollections.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="disbursements" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold text-purple-700 dark:text-purple-300">
+              <span className="hidden sm:inline">Loan Disbursements / Borrower Given Amount ({filteredDisbursements.length})</span>
+              <span className="sm:hidden">Disbursements ({filteredDisbursements.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="expenses" className="text-xs px-3 py-1.5 whitespace-nowrap font-semibold">
+              <span className="hidden sm:inline">Expense Vouchers ({filteredExpenses.length})</span>
+              <span className="sm:hidden">Expenses ({filteredExpenses.length})</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: Weekly Collection Cycle Breakdown Table */}
+          <TabsContent value="summary">
+            <Card className="p-4 space-y-3 border-border/80">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Calendar className="size-4 text-primary" /> Weekly Collections & Expense Deduction Breakdown
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Financial week cycle breakdown showing gross collected amounts minus operational expenses for each week.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleExportCsv("summary")} className="h-8 text-xs">
+                  <Download className="size-3.5 mr-1" /> Export CSV
+                </Button>
+              </div>
+
+              {loading ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Loading summary report...</p>
+              ) : weeklySummaries.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">No collections or expenses found matching selected filters.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-xs">
+                        <TableHead className="py-2.5 font-bold">Week Cycle & Date Range</TableHead>
+                        <TableHead className="py-2.5 font-bold text-right">Gross Collections</TableHead>
+                        <TableHead className="py-2.5 font-bold text-right">Expenses Deducted</TableHead>
+                        <TableHead className="py-2.5 font-bold text-right">Net Cash Collected</TableHead>
+                        <TableHead className="py-2.5 font-bold text-center">Receipts & Vouchers</TableHead>
+                        <TableHead className="py-2.5 font-bold text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {weeklySummaries.map((row) => (
+                        <TableRow key={row.cycleIndex} className="text-xs hover:bg-muted/30">
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-bold text-foreground text-xs">{row.label}</span>
+                              {row.isCurrent ? (
+                                <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/30">
+                                  ★ Current Week
+                                </Badge>
+                              ) : row.isFuture ? (
+                                <Badge variant="outline" className="text-[10px] font-normal bg-muted text-muted-foreground border-border">
+                                  Upcoming
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                                  ✅ Completed Cycle
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-mono font-bold text-emerald-700">
+                            {inr(row.grossCollected)}
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-mono font-semibold text-rose-600">
+                            {row.totalExpenses > 0 ? `- ${inr(row.totalExpenses)}` : "₹0"}
+                          </TableCell>
+                          <TableCell className={`py-3 text-right font-mono font-bold text-sm ${row.netCollection >= 0 ? "text-primary" : "text-rose-700"}`}>
+                            {inr(row.netCollection)}
+                          </TableCell>
+                          <TableCell className="py-3 text-center font-mono">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted text-[11px] font-medium text-foreground">
+                              {row.collectionCount} Collections • {row.expenseCount} Expenses
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3 text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs px-2.5 bg-primary/5 hover:bg-primary/15 text-primary border-primary/20 font-semibold"
+                              onClick={() => {
+                                setViewingCycle(row);
+                              }}
+                            >
+                              <Eye className="size-3.5 mr-1" /> View Week Breakdown
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          {/* Tab 2: Detailed Collections Register */}
+          <TabsContent value="collections">
+            <Card className="p-4 space-y-3 border-border/80">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">Collection Receipts Register</h3>
+                  <p className="text-xs text-muted-foreground">List of all borrower payment receipts.</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleExportCsv("collection")} className="h-8 text-xs">
+                  <Download className="size-3.5 mr-1" /> Export Collections CSV
+                </Button>
+              </div>
+
+              {loading ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Loading receipts...</p>
+              ) : filteredCollections.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">No collection records found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-xs">
+                        <TableHead className="py-2.5">Receipt #</TableHead>
+                        <TableHead className="py-2.5">Date</TableHead>
+                        <TableHead className="py-2.5">Borrower Code</TableHead>
+                        <TableHead className="py-2.5">Borrower Name</TableHead>
+                        <TableHead className="py-2.5 text-right">Amount Collected</TableHead>
+                        <TableHead className="py-2.5">Payment Mode</TableHead>
+                        <TableHead className="py-2.5">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCollections.map((c) => (
+                        <TableRow key={c.public_id} className="text-xs">
+                          <TableCell className="font-mono font-semibold py-2.5">{c.receipt_number}</TableCell>
+                          <TableCell className="font-mono text-[11px] py-2.5">{c.collection_date}</TableCell>
+                          <TableCell className="font-mono py-2.5">{c.customer_code}</TableCell>
+                          <TableCell className="font-semibold py-2.5">{c.customer_name}</TableCell>
+                          <TableCell className="font-mono font-bold text-emerald-700 text-right py-2.5">
+                            {inr(Number(c.collected_amount || 0))}
+                          </TableCell>
+                          <TableCell className="capitalize py-2.5">{c.payment_mode_name || "Cash"}</TableCell>
+                          <TableCell className="py-2.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-600 text-white">
+                              <CheckCircle2 className="size-3" /> {c.status_name || "Paid"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          {/* Tab 3: Loan Disbursements / Borrower Given Amount */}
+          <TabsContent value="disbursements">
+            <Card className="p-4 space-y-4 border-border/80">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Users className="size-4 text-purple-600" /> Borrower Loan Disbursements (Given Amount from Route Start)
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Complete register of actual physical cash handed out to borrowers when loans were issued.
+                  </p>
+                </div>
+                <Badge variant="outline" className="font-mono font-bold text-xs bg-purple-500/10 text-purple-700 border-purple-500/30 px-3 py-1">
+                  Total Given: {inr(totalDisbursedAmount)}
+                </Badge>
+              </div>
+
+              {loading ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Loading disbursement records...</p>
+              ) : filteredDisbursements.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">No borrower loan disbursements found matching selected filters.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-xs">
+                        <TableHead className="py-2.5 font-bold">Borrower Code & Name</TableHead>
+                        <TableHead className="py-2.5 font-bold">Disbursement Date</TableHead>
+                        <TableHead className="py-2.5 font-bold">Route Line / Day</TableHead>
+                        <TableHead className="py-2.5 font-bold text-right">Principal Loan</TableHead>
+                        <TableHead className="py-2.5 font-bold text-right text-purple-700 dark:text-purple-300">Amount Given (Handed Out)</TableHead>
+                        <TableHead className="py-2.5 font-bold text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDisbursements.map((c) => (
+                        <TableRow key={c.public_id} className="text-xs hover:bg-muted/30">
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                                {c.customer_code}
+                              </span>
+                              <span className="font-bold text-foreground">{c.full_name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 font-mono text-xs">
+                            {c.start_date ? String(c.start_date).slice(0, 10) : "-"}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium text-xs">{(c as any).line_name || c.line || "General Workspace"}</span>
+                              {c.collection_day && (
+                                <Badge variant="outline" className="text-[10px] capitalize bg-muted font-normal">
+                                  {c.collection_day}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-mono text-foreground font-semibold">
+                            {inr(Number(c.loan_amount || 0))}
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-mono font-bold text-purple-700 dark:text-purple-300 text-sm">
+                            {inr(Number(c.disbursed_amount || c.loan_amount || 0))}
+                          </TableCell>
+                          <TableCell className="py-3 text-center">
+                            <Badge variant="outline" className={`text-[10px] capitalize font-bold ${c.status === "active" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30" : "bg-muted text-muted-foreground"
+                              }`}>
+                              {c.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          {/* Tab 4: Detailed Expense Vouchers */}
+          <TabsContent value="expenses">
+            <Card className="p-4 space-y-3 border-border/80">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">Operational Expense Vouchers</h3>
+                  <p className="text-xs text-muted-foreground">List of all operational expenses deducted from route collections.</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleExportCsv("expense")} className="h-8 text-xs">
+                  <Download className="size-3.5 mr-1" /> Export Expenses CSV
+                </Button>
+              </div>
+
+              {loading ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Loading expense vouchers...</p>
+              ) : filteredExpenses.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">No expense records found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-xs">
+                        <TableHead className="py-2.5">Date</TableHead>
+                        <TableHead className="py-2.5">Category</TableHead>
+                        <TableHead className="py-2.5">Description / Notes</TableHead>
+                        <TableHead className="py-2.5 text-right">Amount (₹)</TableHead>
+                        <TableHead className="py-2.5">Payment Mode</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredExpenses.map((e) => (
+                        <TableRow key={e.public_id} className="text-xs">
+                          <TableCell className="font-mono text-[11px] py-2.5">{e.expense_date}</TableCell>
+                          <TableCell className="font-semibold py-2.5">
+                            <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-700 border-red-500/20">
+                              {e.category_name || "General"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-2.5 text-muted-foreground">{e.description || "N/A"}</TableCell>
+                          <TableCell className="font-mono font-bold text-red-600 text-right py-2.5">
+                            - {inr(Number(e.amount || 0))}
+                          </TableCell>
+                          <TableCell className="capitalize py-2.5">{e.payment_mode_name || "Cash"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <DailyBreakdownModal
+          dateKey={viewingSummaryDate}
+          open={Boolean(viewingSummaryDate)}
+          setOpen={(v) => {
+            if (!v) setViewingSummaryDate(null);
+          }}
+          collections={collections}
+          expenses={expenses}
+          customers={customers}
+        />
+
+        {/* Weekly Breakdown Detail Modal */}
+        <WeeklyBreakdownModal
+          cycle={viewingCycle}
+          open={!!viewingCycle}
+          setOpen={(v) => { if (!v) setViewingCycle(null); }}
+          collections={collections}
+          expenses={expenses}
+          customers={customers}
+        />
+      </div>
+    </FeaturePaywallGuard>
   );
 }
 
@@ -1405,7 +1402,7 @@ function WeeklyBreakdownModal({
                   <TableBody>
                     {cycleCollections.map((c) => {
                       const cust = customerMap.get(String(c.customer_public_id).toLowerCase()) ||
-                                   customerMap.get(String(c.customer_code).toLowerCase());
+                        customerMap.get(String(c.customer_code).toLowerCase());
                       const seqNo = cust?.sequence_number;
                       const isSkipped = c.status_code === "skipped" || c.status_name?.toLowerCase().includes("skipped");
 
@@ -1591,7 +1588,7 @@ function DailyBreakdownModal({
                   <TableBody>
                     {dateCollections.map((c) => {
                       const cust = customerMap.get(String(c.customer_public_id).toLowerCase()) ||
-                                   customerMap.get(String(c.customer_code).toLowerCase());
+                        customerMap.get(String(c.customer_code).toLowerCase());
                       const seqNo = cust?.sequence_number;
                       const isSkipped = c.status_code === "skipped" || c.status_name?.toLowerCase().includes("skipped");
 

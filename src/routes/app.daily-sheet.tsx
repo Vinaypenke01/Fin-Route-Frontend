@@ -173,7 +173,7 @@ function DailySheetPage() {
     setRouteStartedMap(nextRouteMap);
     try {
       localStorage.setItem("finroute_active_routes_map", JSON.stringify(nextRouteMap));
-    } catch (e) {}
+    } catch (e) { }
 
     setIsStopRouteModalOpen(false);
     toast.success(`Route session closed & settled! Net closing hand cash float: ${inr(analytics.netHandCash)}`);
@@ -322,7 +322,7 @@ function DailySheetPage() {
             };
             try {
               localStorage.setItem("finroute_settlement_analytics_map", JSON.stringify(nextMap));
-            } catch (e) {}
+            } catch (e) { }
             return nextMap;
           });
         }
@@ -606,7 +606,7 @@ function DailySheetPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6 max-w-7xl">
-      <GuestPlanUsage />
+      {/* <GuestPlanUsage /> */}
       <SubscriptionExpiryBanner />
       {/* ========================================================================= */}
       {/* LEVEL 1: LINES LIST VIEW */}
@@ -826,7 +826,7 @@ function DailySheetPage() {
           setOpen={(v) => {
             if (!v) setEditingCustomer(null);
           }}
-          onDeleteRequest={() => {}}
+          onDeleteRequest={() => { }}
           onSuccess={() => {
             setEditingCustomer(null);
             if (activeLine) loadSheetData();
