@@ -9,10 +9,12 @@
   "orientation": "any",
   "background_color": "#0b1220",
   "theme_color": "#1e40af",
+  "prefer_related_applications": false,
   "categories": ["business", "finance", "productivity"],
   "icons": [
-    { "src": "/logo-removebg-preview (1).png", "sizes": "any", "type": "image/png", "purpose": "any" },
-    { "src": "/logo-removebg-preview (1).png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
+    { "src": "/logo-removebg-preview (1).png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-removebg-preview (1).png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-removebg-preview (1).png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     { "name": "Guest Dashboard", "url": "/app", "description": "Free digital collection book" },

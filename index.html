@@ -47,6 +47,11 @@
         "url": "https://fin-route.site"
       }
     </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FinRoute" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" href="/logo-removebg-preview (1).png" />
     <link rel="apple-touch-icon" href="/logo-removebg-preview (1).png" />
@@ -54,6 +59,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" />
     <script>
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.deferredPwaPrompt = e;
+      });
       try {
         var s = localStorage.getItem('finroute-theme');
         var d = s === 'dark' || (!s && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);

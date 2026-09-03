@@ -38,15 +38,27 @@ function useInstallPromptState() {
       setStatus("installed");
       return;
     }
+
+    if (typeof window !== "undefined" && (window as any).deferredPwaPrompt) {
+      setDeferred((window as any).deferredPwaPrompt);
+      setStatus("installable");
+    }
+
     const onBIP = (e: Event) => {
       e.preventDefault();
+      (window as any).deferredPwaPrompt = e;
       setDeferred(e as BIPEvent);
       setStatus("installable");
     };
+
     const onInstalled = () => {
       setStatus("installed");
       setDeferred(null);
+      if (typeof window !== "undefined") {
+        (window as any).deferredPwaPrompt = null;
+      }
     };
+
     window.addEventListener("beforeinstallprompt", onBIP as EventListener);
     window.addEventListener("appinstalled", onInstalled);
     if (detectIOS()) setStatus((s) => (s === "unsupported" ? "ios" : s));
@@ -57,15 +69,19 @@ function useInstallPromptState() {
   }, []);
 
   const promptInstall = useCallback(async () => {
-    if (!deferred) return null;
-    await deferred.prompt();
-    const choice = await deferred.userChoice;
+    const promptEvt = deferred || (typeof window !== "undefined" && (window as any).deferredPwaPrompt);
+    if (!promptEvt) return null;
+    await promptEvt.prompt();
+    const choice = await promptEvt.userChoice;
     setDeferred(null);
+    if (typeof window !== "undefined") {
+      (window as any).deferredPwaPrompt = null;
+    }
     if (choice.outcome === "accepted") setStatus("installed");
     return choice.outcome;
   }, [deferred]);
 
-  return { status, promptInstall, canPrompt: !!deferred };
+  return { status, promptInstall, canPrompt: !!deferred || (typeof window !== "undefined" && !!(window as any).deferredPwaPrompt) };
 }
 
 export function InstallStatusBadge({ className }: { className?: string }) {
@@ -93,7 +109,7 @@ export function InstallPrompt({
   variant?: "banner" | "floating";
 }) {
   const { status, promptInstall } = useInstallPromptState();
-  const [dismissed, setDismissed] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
   const [showIOS, setShowIOS] = useState(false);
 
   useEffect(() => {
