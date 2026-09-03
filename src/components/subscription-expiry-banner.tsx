@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Sparkles, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Sparkles, AlertTriangle, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { guestWorkspaceService, WorkspaceData } from "@/lib/services/guest-workspace-service";
 
 export function SubscriptionExpiryBanner() {
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+  const [isDismissed, setIsDismissed] = useState<boolean>(false);
 
   useEffect(() => {
     guestWorkspaceService.getWorkspace().then((ws) => {
@@ -19,6 +20,8 @@ export function SubscriptionExpiryBanner() {
     window.addEventListener("guest-plan-change", handlePlanChange);
     return () => window.removeEventListener("guest-plan-change", handlePlanChange);
   }, []);
+
+  if (isDismissed) return null;
 
   let endDateStr = workspace?.subscription_end_date;
   if (!endDateStr && workspace?.subscription_start_date) {
@@ -54,7 +57,7 @@ export function SubscriptionExpiryBanner() {
 
   return (
     <div
-      className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs my-2 ${
+      className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs my-2 relative ${
         isExpired
           ? "bg-rose-500/10 border-rose-500/40 text-rose-900 dark:text-rose-200"
           : isCritical
@@ -102,19 +105,32 @@ export function SubscriptionExpiryBanner() {
         </div>
       </div>
 
-      <Button
-        asChild
-        size="sm"
-        className={`font-bold text-xs gap-1.5 shadow-xs rounded-xl shrink-0 self-start sm:self-auto ${
-          isExpired
-            ? "bg-rose-600 hover:bg-rose-700 text-white"
-            : "bg-amber-600 hover:bg-amber-700 text-white"
-        }`}
-      >
-        <Link to="/app/upgrade">
-          <Sparkles className="size-3.5" /> {isExpired ? "Renew Plan Now" : "Renew / Extend Plan"}
-        </Link>
-      </Button>
+      <div className="flex items-center gap-2 self-start sm:self-auto">
+        <Button
+          asChild
+          size="sm"
+          className={`font-bold text-xs gap-1.5 shadow-xs rounded-xl shrink-0 ${
+            isExpired
+              ? "bg-rose-600 hover:bg-rose-700 text-white"
+              : "bg-amber-600 hover:bg-amber-700 text-white"
+          }`}
+        >
+          <Link to="/app/upgrade">
+            <Sparkles className="size-3.5" /> {isExpired ? "Renew Plan Now" : "Renew / Extend Plan"}
+          </Link>
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsDismissed(true)}
+          className="size-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 shrink-0"
+          title="Dismiss warning banner"
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }

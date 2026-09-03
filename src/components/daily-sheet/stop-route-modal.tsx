@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Square, CheckCircle2, RefreshCw, Calculator, TrendingUp, TrendingDown, Receipt, Plus, Trash2 } from "lucide-react";
+import { Square, CheckCircle2, RefreshCw, Calculator, TrendingUp, TrendingDown, Receipt, Plus, Trash2, AlertTriangle, XCircle } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, CollectionLine, Customer } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
@@ -59,6 +59,7 @@ export function StopRouteSettlementModal({
     }, 0);
   }, [customers, selectedDate]);
 
+  const [openingCashInput, setOpeningCashInput] = useState<string>(String(openingCash));
   const [disbursedInput, setDisbursedInput] = useState<string>(String(autoDisbursedSum));
 
   // Master Data States
@@ -73,6 +74,7 @@ export function StopRouteSettlementModal({
   // Load Master Data & Existing Expenses for selectedDate
   useEffect(() => {
     if (open && selectedDate) {
+      setOpeningCashInput(String(openingCash));
       setLoadingInitial(true);
       Promise.all([
         mastersService.getExpenseCategories(),
@@ -95,7 +97,6 @@ export function StopRouteSettlementModal({
             }));
             setExpenseEntries(mapped);
           } else {
-            // Default 1 blank expense row if no existing expenses recorded
             setExpenseEntries([]);
           }
         })
@@ -104,7 +105,7 @@ export function StopRouteSettlementModal({
         })
         .finally(() => setLoadingInitial(false));
     }
-  }, [open, selectedDate]);
+  }, [open, selectedDate, openingCash]);
 
   // Keep disbursedInput in sync with autoDisbursedSum when modal opens
   useEffect(() => {
@@ -116,8 +117,10 @@ export function StopRouteSettlementModal({
     return expenseEntries.reduce((acc, item) => acc + (parseFloat(item.amount) || 0), 0);
   }, [expenseEntries]);
 
+  const numOpeningCash = parseFloat(openingCashInput) || 0;
   const numDisbursed = parseFloat(disbursedInput) || 0;
-  const netClosingCash = openingCash + totalCollected - numDisbursed - totalExpenses;
+  const netClosingCash = numOpeningCash + totalCollected - numDisbursed - totalExpenses;
+  const isNegativeClosingCash = netClosingCash < 0;
 
   // Add new blank expense row
   const handleAddExpenseRow = () => {
@@ -150,6 +153,8 @@ export function StopRouteSettlementModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isNegativeClosingCash) return;
+
     setSubmitting(true);
 
     try {
@@ -168,7 +173,7 @@ export function StopRouteSettlementModal({
       const analytics: RouteSettlementAnalytics = {
         isSettled: true,
         settledAt: new Date().toISOString(),
-        openingCash,
+        openingCash: numOpeningCash,
         totalCollected,
         totalDisbursed: numDisbursed,
         totalExpenses,
@@ -198,16 +203,33 @@ export function StopRouteSettlementModal({
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {/* Opening & Collected Analytics Highlight Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3.5 bg-muted/60 border border-border rounded-2xl">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold block">Opening Cash Bag</span>
-              <span className="text-base font-black font-mono text-foreground">{inr(openingCash)}</span>
+            {/* Editable Starting Opening Cash Float */}
+            <div className="p-3.5 bg-muted/60 border border-border rounded-2xl space-y-1">
+              <Label className="text-[10px] text-muted-foreground uppercase font-bold block">
+                Starting Opening Cash Float (₹)
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs font-bold text-muted-foreground">₹</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="pl-7 font-mono font-bold text-sm h-10 bg-background"
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Opening cash float in bag at start (editable if extra cash was added).
+              </p>
             </div>
 
-            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl">
-              <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase font-bold block flex items-center gap-1">
-                <TrendingUp className="size-3 text-emerald-600" /> Total Collected
+            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-col justify-between">
+              <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase font-bold flex items-center gap-1">
+                <TrendingUp className="size-3 text-emerald-600" /> Total Collected Today
               </span>
-              <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">{inr(totalCollected)}</span>
+              <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">{inr(totalCollected)}</span>
             </div>
           </div>
 
@@ -270,7 +292,7 @@ export function StopRouteSettlementModal({
               </div>
             ) : (
               <div className="space-y-2">
-                {expenseEntries.map((item, idx) => (
+                {expenseEntries.map((item) => (
                   <div key={item.id} className="p-3 bg-background border border-border rounded-xl space-y-2">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {/* Expense Category */}
@@ -358,18 +380,38 @@ export function StopRouteSettlementModal({
             )}
           </div>
 
+          {/* Negative Balance Alert Warning Banner */}
+          {isNegativeClosingCash && (
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-900 dark:text-rose-200 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                <AlertTriangle className="size-4 shrink-0 text-rose-600" /> Negative Handover Cash Balance ({inr(netClosingCash)})
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Opening Cash + Collected ({inr(numOpeningCash + totalCollected)}) is less than total Disbursed Loans & Expenses ({inr(numDisbursed + totalExpenses)}). Please update your <strong>Starting Opening Cash Float</strong> above.
+              </p>
+            </div>
+          )}
+
           {/* Calculated Net Closing Handbag Cash Float Box */}
-          <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 rounded-2xl space-y-2">
+          <div className={`p-4 rounded-2xl space-y-2 border transition-all ${
+            isNegativeClosingCash
+              ? "bg-rose-500/10 border-rose-500/40"
+              : "bg-emerald-500/10 border-emerald-500/30"
+          }`}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                <Calculator className="size-4 text-emerald-600" /> Net Closing Handbag Float (To Handover):
+              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-foreground">
+                <Calculator className="size-4 text-primary" /> Net Closing Handbag Float (To Handover):
               </span>
-              <Badge className="bg-emerald-600 text-white font-mono font-bold text-sm px-2.5 py-0.5">
+              <Badge className={`font-mono font-bold text-sm px-2.5 py-0.5 ${
+                isNegativeClosingCash
+                  ? "bg-rose-600 text-white"
+                  : "bg-emerald-600 text-white"
+              }`}>
                 {inr(netClosingCash)}
               </Badge>
             </div>
             <p className="text-[11px] font-mono text-muted-foreground">
-              Formula: {inr(openingCash)} (Opening) + {inr(totalCollected)} (Collected) - {inr(numDisbursed)} (Disbursed) - {inr(totalExpenses)} (Expenses) = <strong>{inr(netClosingCash)}</strong>
+              Formula: {inr(numOpeningCash)} (Opening) + {inr(totalCollected)} (Collected) - {inr(numDisbursed)} (Disbursed) - {inr(totalExpenses)} (Expenses) = <strong className={isNegativeClosingCash ? "text-rose-600 font-bold" : "text-emerald-600 font-bold"}>{inr(netClosingCash)}</strong>
             </p>
           </div>
 
@@ -379,15 +421,21 @@ export function StopRouteSettlementModal({
             </Button>
             <Button
               type="submit"
-              disabled={submitting}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold gap-1.5"
+              disabled={submitting || isNegativeClosingCash}
+              className={`font-bold gap-1.5 transition-all ${
+                isNegativeClosingCash
+                  ? "bg-slate-400 cursor-not-allowed opacity-60 text-white"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+              }`}
             >
               {submitting ? (
                 <RefreshCw className="size-4 animate-spin" />
+              ) : isNegativeClosingCash ? (
+                <XCircle className="size-4" />
               ) : (
                 <CheckCircle2 className="size-4" />
               )}
-              Confirm & Settle Route Session
+              {isNegativeClosingCash ? "Cannot Settle (Negative Float)" : "Confirm & Settle Route Session"}
             </Button>
           </DialogFooter>
         </form>

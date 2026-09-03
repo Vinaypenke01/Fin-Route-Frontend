@@ -121,6 +121,24 @@ function DailySheetPage() {
     }
   });
 
+  // Resolve Previous Settled Cycle's Net Closing Hand Cash Float
+  const previousCycleClosingCash = useMemo(() => {
+    if (!activeLine) return 0;
+    const settledKeys = Object.keys(settlementMap).filter(
+      (k) => k.startsWith(activeLine.public_id) && settlementMap[k]?.isSettled
+    );
+    if (settledKeys.length === 0) return 0;
+
+    const lastKey = settledKeys[settledKeys.length - 1];
+    return settlementMap[lastKey]?.netHandCash || 0;
+  }, [activeLine, settlementMap]);
+
+  const handleOpenStartRouteModal = () => {
+    const defaultCash = previousCycleClosingCash > 0 ? previousCycleClosingCash : 0;
+    setOpeningCashInput(String(defaultCash));
+    setIsStartRouteModalOpen(true);
+  };
+
   const handleStartRouteConfirm = (openingCash: number) => {
     if (!activeLine) return;
     const cycleKey = `${activeLine.public_id}_${selectedDateFrom}_${selectedDateTo}`;
@@ -257,8 +275,9 @@ function DailySheetPage() {
 
       const colMap: Record<string, Collection> = {};
       (collectionsRes.data || []).forEach((col) => {
-        if (col.customer_public_id) {
-          colMap[col.customer_public_id] = col;
+        const cId = col.customer_public_id || (typeof col.customer === "object" ? (col.customer as any)?.public_id : col.customer);
+        if (cId) {
+          colMap[String(cId)] = col;
         }
       });
 
@@ -266,7 +285,7 @@ function DailySheetPage() {
       const defaultModeId = paymentModes[0]?.id || 1;
 
       const rows: SheetRowItem[] = displayCusts.map((c) => {
-        const existingCol = colMap[c.public_id];
+        const existingCol = colMap[String(c.public_id)];
         const expAmt = c.installment_amount || c.loan_amount || 0;
 
         return {
@@ -278,7 +297,7 @@ function DailySheetPage() {
           collection_day: c.collection_day || "",
           expected_amount: expAmt,
           collection_id: existingCol?.public_id,
-          collected_amount: existingCol ? String(existingCol.collected_amount) : String(expAmt),
+          collected_amount: existingCol ? String(existingCol.collected_amount) : "0",
           status_id: existingCol ? (existingCol.status || defaultStatusId) : defaultStatusId,
           payment_mode_id: existingCol ? (existingCol.payment_mode || defaultModeId) : defaultModeId,
           is_saved: !!existingCol,
@@ -674,7 +693,7 @@ function DailySheetPage() {
           routeOpeningCash={routeOpeningCash}
           settlementAnalytics={currentSettlement}
           onBackToCycles={() => updateNav({ view: "days" })}
-          onStartRouteClick={() => setIsStartRouteModalOpen(true)}
+          onStartRouteClick={handleOpenStartRouteModal}
           onStopRouteClick={handleStopRoute}
           onAddCustomerClick={() => {
             if (!isRouteStarted && !currentSettlement?.isSettled) {
@@ -788,6 +807,13 @@ function DailySheetPage() {
             }}
             className="space-y-4 pt-2"
           >
+            {previousCycleClosingCash > 0 && (
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-300 text-xs flex items-center justify-between font-medium">
+                <span>Auto-filled from previous cycle closing in-hand cash:</span>
+                <span className="font-mono font-bold text-sm text-emerald-700 dark:text-emerald-300">{inr(previousCycleClosingCash)}</span>
+              </div>
+            )}
+
             <div>
               <Label className="text-xs font-bold">Opening Handheld Cash Float (₹)</Label>
               <div className="relative mt-1">
@@ -802,7 +828,7 @@ function DailySheetPage() {
                 />
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Starting cash in bag at the beginning of the field route.
+                Starting cash in bag at the beginning of the field route (editable).
               </p>
             </div>
 

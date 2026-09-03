@@ -90,7 +90,11 @@ export function Level3SheetView({
     (acc, r) => acc + (parseFloat(String(r.collected_amount)) || 0),
     0
   );
-  const totalRemaining = Math.max(0, totalExpected - totalCollected);
+  const totalRemaining = filteredSheetRows.reduce((acc, r) => {
+    const exp = parseFloat(String(r.expected_amount)) || 0;
+    const col = parseFloat(String(r.collected_amount)) || 0;
+    return acc + Math.max(0, exp - col);
+  }, 0);
 
   const activeDaySchedules = activeLine.day_schedules || [];
   const isSettled = !!settlementAnalytics?.isSettled;
@@ -344,7 +348,7 @@ export function Level3SheetView({
           </Button>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredSheetRows.map((row) => {
             const isSkipped = row.is_saved && (parseFloat(row.collected_amount) === 0 || row.status_id === 5);
             const isCollected = row.is_saved && parseFloat(row.collected_amount) > 0;
@@ -352,15 +356,15 @@ export function Level3SheetView({
             return (
               <Card
                 key={row.customer_id}
-                className={`p-2.5 sm:p-3 rounded-2xl border transition-all space-y-1.5 ${
+                className={`p-3 rounded-2xl border transition-all space-y-2 border-l-4 ${
                   isCollected
-                    ? "bg-emerald-500/5 border-emerald-500/30"
+                    ? "bg-emerald-500/10 border-emerald-500/40 border-l-emerald-500 shadow-xs dark:bg-emerald-950/30 dark:border-emerald-500/40"
                     : isSkipped
-                    ? "bg-rose-500/5 border-rose-500/30"
-                    : "bg-card border-border shadow-xs"
+                    ? "bg-rose-500/10 border-rose-500/40 border-l-rose-500 shadow-xs dark:bg-rose-950/30 dark:border-rose-500/40"
+                    : "bg-card border-border border-l-slate-300 dark:border-l-slate-700 shadow-xs"
                 }`}
               >
-                {/* Row 1: ID, Name, Code + Status Badge + Pencil Icon */}
+                {/* Header Row: Sequence, Name, Code, Badges & Edit Profile */}
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="flex items-center gap-1.5 overflow-hidden">
                     <div className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-mono text-[11px] font-black border border-primary/20 shrink-0">
@@ -371,22 +375,22 @@ export function Level3SheetView({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Saved Status Badge */}
+                    {/* Saved Status Badges */}
                     {isCollected ? (
-                      <Badge className="bg-emerald-600 text-white text-[9px] font-bold py-0 px-1.5 gap-0.5 shadow-xs">
-                        <CheckCircle2 className="size-2.5" /> {inr(parseFloat(row.collected_amount))}
+                      <Badge className="bg-emerald-600 text-white text-[10px] font-bold py-0.5 px-2 gap-1 shadow-xs">
+                        <CheckCircle2 className="size-3" /> PAID {inr(parseFloat(row.collected_amount))}
                       </Badge>
                     ) : isSkipped ? (
-                      <Badge className="bg-rose-600 text-white text-[9px] font-bold py-0 px-1.5 gap-0.5 shadow-xs">
-                        <XCircle className="size-2.5" /> Skipped
+                      <Badge className="bg-rose-600 text-white text-[10px] font-bold py-0.5 px-2 gap-1 shadow-xs">
+                        <XCircle className="size-3" /> SKIPPED
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground py-0 px-1.5">
-                        Pending
+                      <Badge variant="outline" className="text-[10px] font-bold text-amber-700 border-amber-500/40 bg-amber-500/10 dark:text-amber-300 py-0.5 px-2">
+                        PENDING
                       </Badge>
                     )}
 
-                    {/* Single Pencil Icon Edit Button at Top Right */}
+                    {/* Single Pencil Icon Edit Button */}
                     <Button
                       size="icon"
                       variant="ghost"
@@ -402,54 +406,53 @@ export function Level3SheetView({
                   </div>
                 </div>
 
-                {/* Row 2: Phone + Collection Day (Left) | Expected Amount (Right) */}
-                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <div className="flex items-center gap-1.5 overflow-hidden">
-                    <span className="truncate">Phone: <strong className="font-mono text-foreground">{row.mobile_number}</strong></span>
+                {/* Bottom Row: Phone + Collection Day + Expected Amount (Left) | Compact Small Action Buttons (Right) */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                  <div className="flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                    <span className="truncate">Phone: <strong className="font-mono text-foreground font-semibold">{row.mobile_number}</strong></span>
                     {row.collection_day && (
-                      <>
-                        <span>•</span>
-                        <Badge className="bg-primary/10 text-primary border-primary/20 capitalize text-[9px] font-bold py-0 px-1 shrink-0">
-                          {row.collection_day}
-                        </Badge>
-                      </>
+                      <Badge className="bg-primary/10 text-primary border-primary/20 capitalize text-[9px] font-bold py-0 px-1 shrink-0">
+                        {row.collection_day}
+                      </Badge>
                     )}
+                    <span className="shrink-0 text-foreground font-semibold">
+                      Exp: <strong className="font-mono font-bold text-foreground text-xs">{inr(row.expected_amount)}</strong>
+                    </span>
                   </div>
 
-                  <div className="shrink-0 font-semibold text-[11px]">
-                    Exp: <strong className="font-mono font-bold text-foreground text-xs">{inr(row.expected_amount)}</strong>
+                  {/* Compact Small Action Buttons (Tick ✓ Collect & Cross X Skip) */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                    <Button
+                      disabled={savingRowId === row.customer_id}
+                      onClick={() => onOpenConfirmModal(row)}
+                      className="h-7 px-2.5 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition-all active:scale-95 flex items-center gap-1"
+                      title={isCollected ? "Re-collect Payment" : "Collect Payment"}
+                    >
+                      {savingRowId === row.customer_id ? (
+                        <RefreshCw className="size-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="size-3.5 stroke-[3]" /> {isCollected ? "Re-collect" : "Collect"}
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      disabled={savingRowId === row.customer_id}
+                      onClick={() => onSkipRow(row)}
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] font-bold text-rose-600 border-rose-500/30 hover:bg-rose-500/10 rounded-lg shadow-xs transition-all active:scale-95 flex items-center gap-1"
+                      title="Skip for Week"
+                    >
+                      {savingRowId === row.customer_id ? (
+                        <RefreshCw className="size-3 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="size-3.5 stroke-[3]" /> Skip
+                        </>
+                      )}
+                    </Button>
                   </div>
-                </div>
-
-                {/* Row 3: 50% / 50% Full-Width Action Buttons (Tick ✓ & Cross X Icon-Only) */}
-                <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                  {/* Tick Button (✓) - 50% Width, Icon-Only */}
-                  <Button
-                    disabled={savingRowId === row.customer_id}
-                    onClick={() => onOpenConfirmModal(row)}
-                    className="h-8 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black shadow-xs transition-all active:scale-95 flex items-center justify-center"
-                    title="Collect Payment (✓)"
-                  >
-                    {savingRowId === row.customer_id ? (
-                      <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                      <Check className="size-4 stroke-[3]" />
-                    )}
-                  </Button>
-
-                  {/* Cross Button (X) - 50% Width, Icon-Only */}
-                  <Button
-                    disabled={savingRowId === row.customer_id}
-                    onClick={() => onSkipRow(row)}
-                    className="h-8 w-full bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black shadow-xs transition-all active:scale-95 flex items-center justify-center"
-                    title="Skip for Week (X)"
-                  >
-                    {savingRowId === row.customer_id ? (
-                      <RefreshCw className="size-3.5 animate-spin" />
-                    ) : (
-                      <X className="size-4 stroke-[3]" />
-                    )}
-                  </Button>
                 </div>
               </Card>
             );

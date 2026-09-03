@@ -164,14 +164,14 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-3xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-            <MapPin className="size-5 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+            <MapPin className="size-5 text-primary shrink-0" />
             {lineToEdit ? "Edit Collection Line (Route)" : "Configure New Collection Line (Route)"}
           </DialogTitle>
           <DialogDescription asChild>
-            <div className="text-sm text-muted-foreground space-y-1">
+            <div className="text-xs text-muted-foreground space-y-1">
               <span>Set up your collection route name, area details, and assigned day time slots.</span>
             </div>
           </DialogDescription>
@@ -185,14 +185,14 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
 
         <div className="space-y-4 py-2">
           {/* 1. Line Name & Area */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Line / Business Route Name *</Label>
               <Input
                 placeholder="e.g. Line 1 — Market Area"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-9 text-sm"
+                className="h-9 text-xs sm:text-sm"
               />
             </div>
             <div className="space-y-1.5">
@@ -201,19 +201,21 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                 placeholder="e.g. Kukatpally Sector 4, Main Road"
                 value={area}
                 onChange={(e) => setArea(e.target.value)}
-                className="h-9 text-sm"
+                className="h-9 text-xs sm:text-sm"
               />
             </div>
           </div>
 
           {/* 2. Collection Days & Portion Selection OR Upgrade Banner */}
           <div className="space-y-2 pt-2 border-t">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <Label className="text-xs font-bold flex items-center gap-1.5">
                 <Calendar className="size-4 text-primary" />
                 Assign Days & Time Portions
               </Label>
-              <span className="text-[11px] text-muted-foreground">Select Morning (1am-1pm), Afternoon (1pm-12am), or Both</span>
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground">
+                Select Morning (1am-1pm), Afternoon (1pm-12am), or Both
+              </span>
             </div>
 
             {loading ? (
@@ -245,28 +247,30 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                   const canBoth = avail.includes("both") || currentPortion === "both";
 
                   return (
-                    <div key={dayKey} className="p-2.5 bg-muted/40 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold w-24">{dayLabel}</span>
+                    <div key={dayKey} className="p-2.5 bg-muted/40 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center justify-between sm:justify-start gap-2">
+                        <span className="text-xs font-bold sm:w-24">{dayLabel}</span>
                         {currentPortion && (
-                          <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-bold">
+                          <Badge variant="secondary" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-bold px-1.5 py-0">
                             Selected
                           </Badge>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:gap-1.5 w-full sm:w-auto">
                         <Button
                           type="button"
                           size="sm"
                           variant={currentPortion === "morning" ? "default" : "outline"}
                           disabled={!canMorning}
                           onClick={() => handleToggleDayPortion(dayKey, "morning")}
-                          className={`h-7 px-2 text-[11px] font-medium gap-1 ${
+                          className={`h-8 sm:h-7 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-medium gap-1 justify-center ${
                             currentPortion === "morning" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
                           }`}
                         >
-                          <Sun className="size-3" /> Morning (1am–1pm)
+                          <Sun className="size-3 shrink-0" />
+                          <span className="hidden sm:inline">Morning (1am–1pm)</span>
+                          <span className="sm:hidden">Morning</span>
                         </Button>
 
                         <Button
@@ -275,11 +279,13 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                           variant={currentPortion === "afternoon" ? "default" : "outline"}
                           disabled={!canAfternoon}
                           onClick={() => handleToggleDayPortion(dayKey, "afternoon")}
-                          className={`h-7 px-2 text-[11px] font-medium gap-1 ${
+                          className={`h-8 sm:h-7 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-medium gap-1 justify-center ${
                             currentPortion === "afternoon" ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""
                           }`}
                         >
-                          <Moon className="size-3" /> Afternoon (1pm–12am)
+                          <Moon className="size-3 shrink-0" />
+                          <span className="hidden sm:inline">Afternoon (1pm–12am)</span>
+                          <span className="sm:hidden">Afternoon</span>
                         </Button>
 
                         <Button
@@ -288,11 +294,12 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
                           variant={currentPortion === "both" ? "default" : "outline"}
                           disabled={!canBoth}
                           onClick={() => handleToggleDayPortion(dayKey, "both")}
-                          className={`h-7 px-2 text-[11px] font-medium gap-1 ${
+                          className={`h-8 sm:h-7 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-medium gap-1 justify-center ${
                             currentPortion === "both" ? "bg-primary text-primary-foreground" : ""
                           }`}
                         >
-                          Full Day (Both)
+                          <span className="hidden sm:inline">Full Day (Both)</span>
+                          <span className="sm:hidden">Full Day</span>
                         </Button>
                       </div>
                     </div>

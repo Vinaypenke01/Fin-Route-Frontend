@@ -41,7 +41,7 @@ export function RecordCollectionModal({
   submitting: boolean;
 }) {
   const [collectedAmountInput, setCollectedAmountInput] = useState<string>(
-    row.collected_amount || String(row.expected_amount)
+    parseFloat(row.collected_amount) > 0 ? row.collected_amount : String(row.expected_amount)
   );
   const [selectedModeId, setSelectedModeId] = useState<string>(
     String(row.payment_mode_id || paymentModes[0]?.id || 1)
