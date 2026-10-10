@@ -64,7 +64,7 @@ function AdminUpgradeRequestsPage() {
           </div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-white">Plan Upgrade Requests</h1>
           <p className="text-xs text-slate-200 mt-1">
-            Review guest lender upgrade inquiries submitted via WhatsApp/Upgrade page and activate their collection days capacity upon approval.
+            Review guest lender upgrade inquiries submitted via WhatsApp/Upgrade page and activate their full premium workspace features upon approval.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={loadRequests} disabled={loading} className="text-white border-white/30 bg-white/10 hover:bg-white/20 self-start sm:self-auto">

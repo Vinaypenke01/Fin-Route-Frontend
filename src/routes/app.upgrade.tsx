@@ -120,24 +120,24 @@ function UpgradePage() {
               <Crown className="size-3.5 text-amber-400" /> Guest Workspace Plan
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              Upgrade Collection Operating Days
+              FinRoute Workspace Upgrade
             </h1>
             <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-              Every guest workspace includes <span className="font-bold text-amber-300">1 Collection Day / Week with Unlimited Customers</span> by default. Select a plan to increase your weekly collection days.
+              Every guest workspace includes <span className="font-bold text-amber-300">Unlimited Route Lines (up to 14 Weekly Time-Slots) & Unlimited Borrowers</span> for FREE by default. Upgrade to Premium to unlock Executive Dashboard, WhatsApp Passbooks, Expenses & Financial Reports!
             </p>
           </div>
 
           {/* Current Plan Badge Card */}
           <Card className="p-5 bg-white/10 backdrop-blur-md border-white/20 text-white space-y-3 min-w-[240px]">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">Active Balance</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">Free Tier Capacity</span>
               <Badge variant="outline" className="text-[10px] text-white border-white/30 capitalize">
-                {data?.purchased_additional_days && data.purchased_additional_days > 0 ? "Paid Plan" : "Free Plan"}
+                Unlimited Lines
               </Badge>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold font-mono text-white">{data?.total_allowed_days || 1}</span>
-              <span className="text-xs text-slate-200">Collection Days / Wk</span>
+              <span className="text-3xl font-extrabold font-mono text-white">14</span>
+              <span className="text-xs text-slate-200">Weekly Time-Slots (7 Days × 2 Shifts)</span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-slate-200 border-t border-white/15 pt-2">
               <Users className="size-3.5 text-emerald-400" />

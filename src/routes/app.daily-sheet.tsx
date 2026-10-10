@@ -197,14 +197,18 @@ function DailySheetPage() {
     toast.success(`Route session closed & settled! Net closing hand cash float: ${inr(analytics.netHandCash)}`);
   };
 
-  // Navigation URL Updater helper
-  const updateNav = (params: Partial<DailySheetSearch>) => {
+  // Navigation URL Updater helper with browser history push support
+  const updateNav = (params: Partial<DailySheetSearch>, pushHistory = true) => {
     navigate({
-      search: (prev: DailySheetSearch) => ({
-        ...prev,
-        ...params,
-      }),
-      replace: true,
+      search: (prev: DailySheetSearch) => {
+        const next = { ...prev, ...params };
+        // Guarantee active lineId is preserved when transitioning to days or customers view
+        if ((next.view === "days" || next.view === "customers") && !next.lineId && activeLineId) {
+          next.lineId = activeLineId;
+        }
+        return next;
+      },
+      replace: !pushHistory,
     });
   };
 
@@ -274,8 +278,8 @@ function DailySheetPage() {
       }
 
       const colMap: Record<string, Collection> = {};
-      (collectionsRes.data || []).forEach((col) => {
-        const cId = col.customer_public_id || (typeof col.customer === "object" ? (col.customer as any)?.public_id : col.customer);
+      (collectionsRes.data || []).forEach((col: any) => {
+        const cId = col.customer_public_id || (typeof col.customer === "object" ? col.customer?.public_id : col.customer);
         if (cId) {
           colMap[String(cId)] = col;
         }
@@ -635,7 +639,28 @@ function DailySheetPage() {
           lines={lines}
           loading={loading}
           onSelectLine={(line) => {
-            updateNav({ view: "days", lineId: line.public_id });
+            updateNav(
+              {
+                view: "days",
+                lineId: line.public_id,
+                dateFrom: "",
+                dateTo: "",
+                dayTab: "all",
+              },
+              true
+            );
+          }}
+          onOpenTodaySheet={(line) => {
+            updateNav(
+              {
+                view: "customers",
+                lineId: line.public_id,
+                dateFrom: todayStr,
+                dateTo: todayStr,
+                dayTab: "all",
+              },
+              true
+            );
           }}
           onAddLineClick={() => {
             setLineToEdit(null);
@@ -649,6 +674,27 @@ function DailySheetPage() {
         />
       )}
 
+      {/* Loading Skeleton Fallback for Stage 2 & 3 */}
+      {(currentView === "days" || currentView === "customers") && loading && !activeLine && (
+        <div className="p-12 text-center text-xs text-muted-foreground font-semibold">
+          Loading route sheet details...
+        </div>
+      )}
+
+      {/* Invalid Line Fallback to Stage 1 */}
+      {(currentView === "days" || currentView === "customers") && !loading && !activeLine && (
+        <div className="p-12 text-center space-y-3 bg-card border rounded-3xl">
+          <p className="text-xs text-muted-foreground font-semibold">Route line not found or removed.</p>
+          <Button
+            size="sm"
+            onClick={() => updateNav({ view: "lines", lineId: "", dateFrom: "", dateTo: "", dayTab: "all" }, true)}
+            className="bg-primary text-primary-foreground font-bold text-xs"
+          >
+            Back to All Route Lines
+          </Button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* LEVEL 2: DAYS & ROUTE CYCLES VIEW */}
       {/* ========================================================================= */}
@@ -657,16 +703,19 @@ function DailySheetPage() {
           activeLine={activeLine}
           availableCycles={availableCycles}
           onBackToLines={() => {
-            updateNav({ view: "lines", lineId: "", dateFrom: "", dateTo: "", dayTab: "all" });
+            updateNav({ view: "lines", lineId: "", dateFrom: "", dateTo: "", dayTab: "all" }, true);
           }}
           onSelectCycle={(cycle) => {
-            updateNav({
-              view: "customers",
-              lineId: activeLine.public_id,
-              dateFrom: cycle.dateFrom,
-              dateTo: cycle.dateTo,
-              dayTab: "all",
-            });
+            updateNav(
+              {
+                view: "customers",
+                lineId: activeLine.public_id,
+                dateFrom: cycle.dateFrom,
+                dateTo: cycle.dateTo,
+                dayTab: "all",
+              },
+              true
+            );
           }}
           onAddCustomDateClick={() => setIsAddDateModalOpen(true)}
         />
@@ -692,7 +741,30 @@ function DailySheetPage() {
           isRouteStarted={isRouteStarted}
           routeOpeningCash={routeOpeningCash}
           settlementAnalytics={currentSettlement}
-          onBackToCycles={() => updateNav({ view: "days" })}
+          onBackToCycles={() => {
+            updateNav(
+              {
+                view: "days",
+                lineId: activeLine.public_id,
+                dateFrom: "",
+                dateTo: "",
+                dayTab: "all",
+              },
+              true
+            );
+          }}
+          onBackToLines={() => {
+            updateNav(
+              {
+                view: "lines",
+                lineId: "",
+                dateFrom: "",
+                dateTo: "",
+                dayTab: "all",
+              },
+              true
+            );
+          }}
           onStartRouteClick={handleOpenStartRouteModal}
           onStopRouteClick={handleStopRoute}
           onAddCustomerClick={() => {

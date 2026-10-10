@@ -19,14 +19,28 @@ import {
   MapPin,
   Clock,
   Loader2,
+  LayoutDashboard,
 } from "lucide-react";
 
 interface FeaturePaywallGuardProps {
-  module: "customers" | "collections" | "expenses" | "reports";
+  module: "dashboard" | "customers" | "collections" | "expenses" | "reports";
   children: React.ReactNode;
 }
 
 const MODULE_DETAILS = {
+  dashboard: {
+    title: "Executive Business Dashboard & Analytics",
+    icon: LayoutDashboard,
+    description: "Access complete collection KPIs, cashflow charts, customer activity summaries, and profit analytics.",
+    features: [
+      "📊 Executive Cashflow & Daily Revenue Analytics Charts",
+      "📈 Today's vs. Monthly Expected & Collected KPI Summary",
+      "💼 Instant Net Profit & Route Expense Outflow Math",
+      "📲 Quick Collection Log & Migration Onboarding Wizards",
+      "📧 Automated Daily Route Closure Email Summaries",
+      "🔀 Multi-Line & Multi-Branch Business Dashboard",
+    ],
+  },
   customers: {
     title: "Borrower Profiles & Passbook Suite",
     icon: Users,
@@ -217,9 +231,9 @@ export function FeaturePaywallGuard({ module, children }: FeaturePaywallGuardPro
               <MapPin className="size-4 text-emerald-600 shrink-0" />
               <div>
                 <span className="text-xs font-bold text-foreground block">
-                  Free Plan: <span className="font-mono text-muted-foreground">{freeLines}</span> → Upgraded: <span className="font-mono font-black text-emerald-700 dark:text-emerald-400">{upgradedLines}</span>
+                  Free Plan: <span className="font-mono text-emerald-700 dark:text-emerald-400 font-black">Unlimited Lines (14 Slots/Wk)</span>
                 </span>
-                <span className="text-[11px] text-muted-foreground">Unlimited route collections, borrower passbooks & reports</span>
+                <span className="text-[11px] text-muted-foreground">Unlock Executive Dashboard, WhatsApp Passbooks, Expenses & Financial Analytics</span>
               </div>
             </div>
             <Badge variant="outline" className="bg-background text-emerald-700 dark:text-emerald-300 font-bold border-emerald-500/40 text-[11px] shrink-0 gap-1">

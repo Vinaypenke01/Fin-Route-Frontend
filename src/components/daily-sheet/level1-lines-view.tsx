@@ -9,6 +9,7 @@ import {
   Calendar as CalendarIcon,
   ChevronRight,
   Edit3,
+  Zap,
 } from "lucide-react";
 import { CollectionLine } from "@/lib/services/guest-workspace-service";
 
@@ -16,12 +17,14 @@ export function Level1LinesView({
   lines,
   loading,
   onSelectLine,
+  onOpenTodaySheet,
   onAddLineClick,
   onEditLineClick,
 }: {
   lines: CollectionLine[];
   loading: boolean;
   onSelectLine: (line: CollectionLine) => void;
+  onOpenTodaySheet?: (line: CollectionLine, e: React.MouseEvent) => void;
   onAddLineClick: () => void;
   onEditLineClick: (line: CollectionLine, e: React.MouseEvent) => void;
 }) {
@@ -158,10 +161,29 @@ export function Level1LinesView({
                     </div>
                   </div>
 
-                  {/* Bottom Transition Prompt */}
-                  <div className="pt-3 border-t border-border/60 flex items-center justify-between text-xs text-primary font-bold">
-                    <span>View Collection Schedules</span>
-                    <ChevronRight className="size-4 group-hover:translate-x-1 transition-transform" />
+                  {/* 1-Tap Quick Action Buttons */}
+                  <div className="pt-3 border-t border-border/60 flex items-center gap-2">
+                    {onOpenTodaySheet && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenTodaySheet(line, e);
+                        }}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 h-9 rounded-xl shadow-xs"
+                      >
+                        <Zap className="size-3.5 fill-current" /> Open Today's Sheet
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onSelectLine(line)}
+                      className="text-xs font-bold h-9 rounded-xl gap-1 text-muted-foreground hover:text-foreground px-3"
+                      title="View Weekly Cycles & Custom Dates"
+                    >
+                      <CalendarIcon className="size-3.5" /> Cycles
+                    </Button>
                   </div>
                 </div>
               </Card>

@@ -75,21 +75,20 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
     }
   };
 
-  const isFreePlan = workspace?.subscription_plan === "free";
-  const maxAllowedDays = workspace?.max_allowed_collection_days || (isFreePlan ? 2 : 7);
+  const calculateLineSlots = (schedules: Record<string, "morning" | "afternoon" | "both">) => {
+    return Object.values(schedules).reduce((sum, portion) => sum + (portion === "both" ? 2 : 1), 0);
+  };
 
-  // Compute total active collection days configured across other lines
-  const existingDaysSet = new Set(
-    existingLines
-      .filter((l) => !lineToEdit || l.public_id !== lineToEdit.public_id)
-      .flatMap((l) => l.day_schedules?.map((s) => s.day_of_week.toLowerCase()) || [])
-  );
-  
-  const currentSelectedDaysSet = new Set(Object.keys(selectedSchedules));
-  const totalCombinedDays = new Set([...existingDaysSet, ...currentSelectedDaysSet]);
-  
-  // Plan is exhausted if user attempts to configure days beyond maxAllowedDays quota (e.g. 2 days / 4 sessions)
-  const isPlanExhausted = isFreePlan && totalCombinedDays.size > maxAllowedDays;
+  const otherLinesSlots = existingLines
+    .filter((l) => !lineToEdit || l.public_id !== lineToEdit.public_id)
+    .reduce((sum, l) => {
+      const lineSum = (l.day_schedules || []).reduce((s, sched) => s + (sched.portion === "both" ? 2 : 1), 0);
+      return sum + lineSum;
+    }, 0);
+
+  const currentLineSlots = calculateLineSlots(selectedSchedules);
+  const totalSlotsUsed = otherLinesSlots + currentLineSlots;
+  const isSlotsExhausted = totalSlotsUsed > 14;
 
   const handleToggleDayPortion = (day: string, portion: "morning" | "afternoon" | "both") => {
     setSelectedSchedules((prev) => {
@@ -134,6 +133,11 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
 
     if (schedulesList.length === 0) {
       setError("Please select at least one collection day session for this line.");
+      return;
+    }
+
+    if (totalSlotsUsed > 14) {
+      setError(`Maximum weekly operating capacity reached (${totalSlotsUsed}/14 slots). Please unassign a session on another line.`);
       return;
     }
 
@@ -206,39 +210,34 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
             </div>
           </div>
 
-          {/* 2. Collection Days & Portion Selection OR Upgrade Banner */}
+          {/* 2. Collection Days & Portion Selection */}
           <div className="space-y-2 pt-2 border-t">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <Label className="text-xs font-bold flex items-center gap-1.5">
                 <Calendar className="size-4 text-primary" />
                 Assign Days & Time Portions
               </Label>
-              <span className="text-[10px] sm:text-[11px] text-muted-foreground">
-                Select Morning (1am-1pm), Afternoon (1pm-12am), or Both
-              </span>
+              <Badge variant="outline" className={`text-[10px] sm:text-xs font-mono font-bold ${totalSlotsUsed > 14 ? "bg-rose-500/10 text-rose-600 border-rose-500/30" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"}`}>
+                {totalSlotsUsed} / 14 Weekly Slots Used
+              </Badge>
             </div>
 
             {loading ? (
               <div className="py-6 flex justify-center text-muted-foreground text-xs gap-2 items-center">
                 <Loader2 className="size-4 animate-spin text-primary" /> Loading day availability...
               </div>
-            ) : isPlanExhausted && !lineToEdit ? (
-              /* Upgrade Banner for Free Plan Users who exhausted their days/sessions */
-              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-3 text-center my-2">
-                <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
-                  <Sparkles className="size-4 text-amber-600" /> Collection Days Limit Reached
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
-                  Your <b>Free Plan</b> permits operating on a maximum of <b>{maxAllowedDays} Collection Days</b> per week (4 Sessions max). Upgrade to Premium to unlock all 7 collection days and unlimited route lines.
-                </p>
-                <Button asChild size="sm" className="text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs">
-                  <Link to="/app/upgrade">
-                    <Sparkles className="size-3.5" /> Upgrade Plan to Unlock All Days
-                  </Link>
-                </Button>
-              </div>
             ) : (
               <div className="space-y-2">
+                {isSlotsExhausted && (
+                  <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-1 text-left my-2">
+                    <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-bold text-xs">
+                      <Sparkles className="size-3.5 text-rose-600" /> Weekly Time-Slot Capacity Reached ({totalSlotsUsed}/14 Slots Occupied)
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      A week has 7 days with 2 operating shifts per day (14 slots total). Deselect a shift on another line to assign this session.
+                    </p>
+                  </div>
+                )}
                 {DAYS_OF_WEEK.map(({ key: dayKey, label: dayLabel }) => {
                   const currentPortion = selectedSchedules[dayKey];
                   const avail = availablePortions[dayKey] || ["morning", "afternoon", "both"];
@@ -331,21 +330,19 @@ export function LineSetupDialog({ open, onOpenChange, lineToEdit, onSuccess }: L
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving || deleting} className="h-8 text-xs">
               Cancel
             </Button>
-            {!(isPlanExhausted && !lineToEdit) && (
-              <Button size="sm" onClick={handleSave} disabled={saving || deleting} className="h-8 text-xs font-bold">
-                {saving ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin mr-1.5" /> Saving...
-                  </>
-                ) : lineToEdit ? (
-                  "Save Line Updates"
-                ) : (
-                  <>
-                    <Plus className="size-3.5 mr-1.5" /> Create Line
-                  </>
-                )}
-              </Button>
-            )}
+            <Button size="sm" onClick={handleSave} disabled={saving || deleting || isSlotsExhausted} className="h-8 text-xs font-bold">
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin mr-1.5" /> Saving...
+                </>
+              ) : lineToEdit ? (
+                "Save Line Updates"
+              ) : (
+                <>
+                  <Plus className="size-3.5 mr-1.5" /> Create Line
+                </>
+              )}
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

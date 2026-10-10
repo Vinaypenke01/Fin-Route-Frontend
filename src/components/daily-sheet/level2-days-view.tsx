@@ -13,6 +13,7 @@ import {
   TrendingDown,
   Receipt,
   Wallet,
+  Zap,
 } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { CollectionLine } from "@/lib/services/guest-workspace-service";
@@ -179,9 +180,19 @@ export function Level2DaysView({
               </div>
             )}
 
-            <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground font-medium">{item.subLabel}</span>
-              <span className="text-primary font-bold">Open Sheet →</span>
+            <div className="pt-3 border-t border-border/40 flex items-center justify-between gap-2 text-xs">
+              <span className="text-muted-foreground font-medium text-[11px]">{item.subLabel}</span>
+              <Button
+                size="sm"
+                className={`font-bold text-xs gap-1.5 h-8 rounded-xl ${
+                  item.isCurrent
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                    : "bg-primary text-primary-foreground"
+                }`}
+              >
+                {item.isCurrent && <Zap className="size-3.5 fill-current" />}
+                <span>{item.isCurrent ? "Open Today's Sheet" : "Open Sheet"}</span>
+              </Button>
             </div>
           </Card>
         ))}

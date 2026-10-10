@@ -166,7 +166,7 @@ export function StopRouteSettlementModal({
           amount: parseFloat(draft.amount),
           expense_date: selectedDate,
           payment_mode: draft.payment_mode_id,
-          description: draft.description || `Route expense for ${activeLine.name}`,
+          description: draft.description ? `${draft.description} (Route: ${activeLine.name})` : `Route closure expense for ${activeLine.name}`,
         });
       }
 

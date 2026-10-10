@@ -51,6 +51,7 @@ export function Level3SheetView({
   routeOpeningCash,
   settlementAnalytics,
   onBackToCycles,
+  onBackToLines,
   onStartRouteClick,
   onStopRouteClick,
   onAddCustomerClick,
@@ -74,6 +75,7 @@ export function Level3SheetView({
   routeOpeningCash: number;
   settlementAnalytics?: RouteSettlementAnalytics;
   onBackToCycles: () => void;
+  onBackToLines?: () => void;
   onStartRouteClick: () => void;
   onStopRouteClick: () => void;
   onAddCustomerClick: () => void;
@@ -134,14 +136,28 @@ export function Level3SheetView({
       {/* Level 3 Breadcrumb Header & Summary */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBackToCycles}
-            className="text-xs font-bold text-muted-foreground hover:text-foreground gap-1 px-0 self-start"
-          >
-            <ArrowLeft className="size-4" /> Back to Route Cycles
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBackToCycles}
+              className="text-xs font-bold text-muted-foreground hover:text-foreground gap-1.5 px-2.5 py-1 bg-muted/50 rounded-xl hover:bg-muted"
+            >
+              <ArrowLeft className="size-4 text-primary" />
+              <span>Back to Route Cycles</span>
+            </Button>
+
+            {onBackToLines && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onBackToLines}
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground gap-1 px-2.5 py-1 rounded-xl hidden sm:inline-flex"
+              >
+                All Lines
+              </Button>
+            )}
+          </div>
 
           {/* Distinct 3-State Route Status Indicators */}
           <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">

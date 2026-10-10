@@ -192,9 +192,9 @@ function RatesAdminPage() {
               </div>
 
               <div className="p-3 bg-primary/5 rounded-2xl border border-primary/20 space-y-1">
-                <span className="text-[10px] font-bold text-primary uppercase block">Free Tier Days & Quotas</span>
+                <span className="text-[10px] font-bold text-primary uppercase block">Free Tier Days & Capacity</span>
                 <p className="text-[11px] text-muted-foreground leading-tight">
-                  Free tier collection day limits and guest user quotas are managed in Guest Plans.
+                  Free tier includes unlimited route lines (up to 14 weekly operational slots) & unlimited borrowers.
                 </p>
                 <Button asChild variant="outline" size="sm" className="h-7 text-[10px] font-bold mt-1 gap-1 text-primary border-primary/30">
                   <Link to="/admin/guest-plan">

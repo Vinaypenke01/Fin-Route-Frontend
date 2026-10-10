@@ -17,7 +17,7 @@ import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
 import { CollectionDaysSetup } from "@/components/collection-days-setup";
 import { MigrationOnboardingWizardModal } from "@/components/migration-onboarding-modal";
-import { Sparkles } from "lucide-react";
+import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 import { guestWorkspaceService, DashboardMetrics, Collection, Expense, Customer } from "@/lib/services/guest-workspace-service";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -409,7 +409,8 @@ function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <FeaturePaywallGuard module="dashboard">
+      <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-2xl font-bold">
@@ -695,5 +696,6 @@ function DashboardPage() {
         </Card>
       </div>
     </div>
-  );
+  </FeaturePaywallGuard>
+);
 }
