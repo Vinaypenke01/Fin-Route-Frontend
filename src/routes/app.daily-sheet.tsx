@@ -98,6 +98,7 @@ function DailySheetPage() {
   const [customDateInput, setCustomDateInput] = useState<string>(todayStr);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [confirmCollectionRow, setConfirmCollectionRow] = useState<SheetRowItem | null>(null);
+  const [pendingCollectRow, setPendingCollectRow] = useState<SheetRowItem | null>(null);
 
   // Route Started Active Tracking State (Persisted in localStorage across page refreshes & sessions)
   const [routeStartedMap, setRouteStartedMap] = useState<
@@ -111,7 +112,7 @@ function DailySheetPage() {
     }
   });
 
-  // Route Settlement Analytics State (Persisted in localStorage across sessions)
+  // Route Settlement Analytics State (Persisted in localStorage & Server DB across sessions & devices)
   const [settlementMap, setSettlementMap] = useState<Record<string, RouteSettlementAnalytics>>(() => {
     try {
       const saved = localStorage.getItem("finroute_settlement_analytics_map");
@@ -121,6 +122,43 @@ function DailySheetPage() {
     }
   });
 
+  // Multi-Device Server Synchronization for Route Settlements & Active Routes
+  useEffect(() => {
+    const syncWithServer = async () => {
+      try {
+        const remoteData = await guestWorkspaceService.getRouteSettlementsSync();
+        const remoteSettlements = remoteData.settlements || {};
+        const remoteActive = remoteData.active_routes || {};
+
+        // Merge remote data with local state
+        setSettlementMap((localPrev) => {
+          const merged = { ...remoteSettlements, ...localPrev };
+          // If local has something that remote didn't have (e.g. from offline mobile), push to server so all devices get it
+          const hasLocalOnly = Object.keys(localPrev).some((k) => !remoteSettlements[k]);
+          if (hasLocalOnly) {
+            guestWorkspaceService.syncRouteSettlements({ settlements: merged });
+          }
+          try {
+            localStorage.setItem("finroute_settlement_analytics_map", JSON.stringify(merged));
+          } catch { }
+          return merged;
+        });
+
+        setRouteStartedMap((localPrev) => {
+          const merged = { ...remoteActive, ...localPrev };
+          try {
+            localStorage.setItem("finroute_active_routes_map", JSON.stringify(merged));
+          } catch { }
+          return merged;
+        });
+      } catch (err) {
+        console.warn("Could not sync route settlements with server:", err);
+      }
+    };
+
+    syncWithServer();
+  }, []);
+
   // Resolve Previous Settled Cycle's Net Closing Hand Cash Float
   const previousCycleClosingCash = useMemo(() => {
     if (!activeLine) return 0;
@@ -129,13 +167,33 @@ function DailySheetPage() {
     );
     if (settledKeys.length === 0) return 0;
 
-    const lastKey = settledKeys[settledKeys.length - 1];
-    return settlementMap[lastKey]?.netHandCash || 0;
-  }, [activeLine, settlementMap]);
+    // Chronologically sort keys based on date portion
+    const sortedKeys = [...settledKeys].sort((a, b) => {
+      const dateA = a.replace(`${activeLine.public_id}_`, "");
+      const dateB = b.replace(`${activeLine.public_id}_`, "");
+      return dateA.localeCompare(dateB);
+    });
 
-  const handleOpenStartRouteModal = () => {
+    const currentKey = `${activeLine.public_id}_${selectedDateFrom}_${selectedDateTo}`;
+    const priorKeys = sortedKeys.filter((k) => k !== currentKey);
+    const keyToUse = priorKeys.length > 0 ? priorKeys[priorKeys.length - 1] : sortedKeys[sortedKeys.length - 1];
+    return settlementMap[keyToUse]?.netHandCash || 0;
+  }, [activeLine, settlementMap, selectedDateFrom, selectedDateTo]);
+
+  // Keep openingCashInput updated when modal opens or previous cycle cash is loaded
+  useEffect(() => {
+    if (isStartRouteModalOpen) {
+      const defaultCash = previousCycleClosingCash > 0 ? previousCycleClosingCash : 0;
+      setOpeningCashInput(String(defaultCash));
+    }
+  }, [isStartRouteModalOpen, previousCycleClosingCash]);
+
+  const handleOpenStartRouteModal = (pendingRow?: SheetRowItem | null) => {
     const defaultCash = previousCycleClosingCash > 0 ? previousCycleClosingCash : 0;
     setOpeningCashInput(String(defaultCash));
+    if (pendingRow) {
+      setPendingCollectRow(pendingRow);
+    }
     setIsStartRouteModalOpen(true);
   };
 
@@ -155,8 +213,16 @@ function DailySheetPage() {
     } catch (e) {
       console.error("Failed to save active route state:", e);
     }
+    // Sync to server in background so other devices see active route status
+    guestWorkspaceService.syncRouteSettlements({ active_routes: nextMap });
+
     toast.success(`▶️ Route collection started for ${activeLine.name}!`);
     setIsStartRouteModalOpen(false);
+
+    if (pendingCollectRow) {
+      setConfirmCollectionRow(pendingCollectRow);
+      setPendingCollectRow(null);
+    }
   };
 
   const handleStopRoute = () => {
@@ -192,6 +258,12 @@ function DailySheetPage() {
     try {
       localStorage.setItem("finroute_active_routes_map", JSON.stringify(nextRouteMap));
     } catch (e) { }
+
+    // Sync to server so ANY device (Desktop/Mobile) gets the settlement immediately!
+    guestWorkspaceService.syncRouteSettlements({
+      settlements: nextMap,
+      cleared_active_keys: [cycleKey, singleKey, fallbackKey],
+    });
 
     setIsStopRouteModalOpen(false);
     toast.success(`Route session closed & settled! Net closing hand cash float: ${inr(analytics.netHandCash)}`);
@@ -277,11 +349,19 @@ function DailySheetPage() {
         );
       }
 
-      const colMap: Record<string, Collection> = {};
+      // Aggregate collections per customer (supports multiple payments within the same cycle/date)
+      const colMap: Record<string, { totalCollected: number; lastCol: any; count: number; primaryId: string }> = {};
       (collectionsRes.data || []).forEach((col: any) => {
-        const cId = col.customer_public_id || (typeof col.customer === "object" ? col.customer?.public_id : col.customer);
+        const cId = String(col.customer_public_id || (typeof col.customer === "object" ? col.customer?.public_id : col.customer) || "");
         if (cId) {
-          colMap[String(cId)] = col;
+          const amt = parseFloat(String(col.collected_amount)) || 0;
+          if (!colMap[cId]) {
+            colMap[cId] = { totalCollected: amt, lastCol: col, count: 1, primaryId: col.public_id };
+          } else {
+            colMap[cId].totalCollected += amt;
+            colMap[cId].lastCol = col;
+            colMap[cId].count += 1;
+          }
         }
       });
 
@@ -289,8 +369,11 @@ function DailySheetPage() {
       const defaultModeId = paymentModes[0]?.id || 1;
 
       const rows: SheetRowItem[] = displayCusts.map((c) => {
-        const existingCol = colMap[String(c.public_id)];
-        const expAmt = c.installment_amount || c.loan_amount || 0;
+        const existingColInfo = colMap[String(c.public_id)];
+        const existingCol = existingColInfo?.lastCol;
+        // If loan is fully settled (0 balance or closed status) and no collection was made in this cycle, expected is 0
+        const isFullySettled = (Number(c.outstanding_balance || 0) <= 0 || c.status === "closed") && !existingColInfo;
+        const expAmt = isFullySettled ? 0 : (c.installment_amount || c.loan_amount || 0);
 
         return {
           customer_id: c.public_id,
@@ -300,11 +383,11 @@ function DailySheetPage() {
           mobile_number: c.mobile_number,
           collection_day: c.collection_day || "",
           expected_amount: expAmt,
-          collection_id: existingCol?.public_id,
-          collected_amount: existingCol ? String(existingCol.collected_amount) : "0",
+          collection_id: existingColInfo?.primaryId || existingCol?.public_id,
+          collected_amount: existingColInfo ? String(existingColInfo.totalCollected) : "0",
           status_id: existingCol ? (existingCol.status || defaultStatusId) : defaultStatusId,
           payment_mode_id: existingCol ? (existingCol.payment_mode || defaultModeId) : defaultModeId,
-          is_saved: !!existingCol,
+          is_saved: !!existingColInfo,
           remarks: existingCol?.remarks || "",
         };
       });
@@ -319,7 +402,7 @@ function DailySheetPage() {
 
         if (existingSettlement?.isSettled) {
           const liveColSum = Object.values(colMap).reduce(
-            (acc, col) => acc + (parseFloat(String(col.collected_amount)) || 0),
+            (acc, colInfo) => acc + (parseFloat(String(colInfo.totalCollected)) || 0),
             0
           );
           const liveDisbursedSum = fetchedCusts.reduce((acc, c) => {
@@ -346,6 +429,7 @@ function DailySheetPage() {
             try {
               localStorage.setItem("finroute_settlement_analytics_map", JSON.stringify(nextMap));
             } catch (e) { }
+            guestWorkspaceService.syncRouteSettlements({ settlements: nextMap });
             return nextMap;
           });
         }

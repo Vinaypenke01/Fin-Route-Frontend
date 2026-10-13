@@ -34,6 +34,8 @@ export function StopRouteSettlementModal({
   onClose,
   activeLine,
   selectedDate,
+  selectedDateFrom,
+  selectedDateTo,
   openingCash,
   totalCollected,
   customers,
@@ -43,21 +45,26 @@ export function StopRouteSettlementModal({
   onClose: () => void;
   activeLine: CollectionLine;
   selectedDate: string;
+  selectedDateFrom?: string;
+  selectedDateTo?: string;
   openingCash: number;
   totalCollected: number;
   customers: Customer[];
   onConfirmSettlement: (analytics: RouteSettlementAnalytics) => void;
 }) {
-  // Automatically calculate Total Loans Disbursed Today based on new customers added for this line/date
+  const effectiveDateFrom = selectedDateFrom || selectedDate;
+  const effectiveDateTo = selectedDateTo || selectedDate;
+
+  // Automatically calculate Total Loans Disbursed based on new customers added for this line/date range
   const autoDisbursedSum = useMemo(() => {
     return customers.reduce((acc, c) => {
       const createdDate = (c.start_date || (c as any).created_at || "").slice(0, 10);
-      if (createdDate === selectedDate) {
+      if (createdDate >= effectiveDateFrom && createdDate <= effectiveDateTo) {
         return acc + (parseFloat(String(c.disbursed_amount || c.loan_amount)) || 0);
       }
       return acc;
     }, 0);
-  }, [customers, selectedDate]);
+  }, [customers, effectiveDateFrom, effectiveDateTo]);
 
   const [openingCashInput, setOpeningCashInput] = useState<string>(String(openingCash));
   const [disbursedInput, setDisbursedInput] = useState<string>(String(autoDisbursedSum));
@@ -71,15 +78,15 @@ export function StopRouteSettlementModal({
   const [loadingInitial, setLoadingInitial] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  // Load Master Data & Existing Expenses for selectedDate
+  // Load Master Data & Existing Expenses for selectedDate / date range
   useEffect(() => {
-    if (open && selectedDate) {
+    if (open && (effectiveDateFrom || selectedDate)) {
       setOpeningCashInput(String(openingCash));
       setLoadingInitial(true);
       Promise.all([
         mastersService.getExpenseCategories(),
         mastersService.getPaymentModes(),
-        guestWorkspaceService.getExpenses({ date_from: selectedDate, date_to: selectedDate }),
+        guestWorkspaceService.getExpenses({ date_from: effectiveDateFrom, date_to: effectiveDateTo }),
       ])
         .then(([cats, modes, expRes]) => {
           setExpenseCategories(cats || []);
@@ -164,7 +171,7 @@ export function StopRouteSettlementModal({
         await guestWorkspaceService.recordExpense({
           category: draft.category_id,
           amount: parseFloat(draft.amount),
-          expense_date: selectedDate,
+          expense_date: effectiveDateTo || selectedDate,
           payment_mode: draft.payment_mode_id,
           description: draft.description ? `${draft.description} (Route: ${activeLine.name})` : `Route closure expense for ${activeLine.name}`,
         });

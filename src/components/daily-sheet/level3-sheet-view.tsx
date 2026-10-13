@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -285,13 +286,20 @@ export function Level3SheetView({
             </p>
           </div>
 
-          <Button
-            onClick={onAddCustomerClick}
-            size="sm"
-            className="bg-primary text-primary-foreground font-bold text-xs gap-1.5 shadow-xs rounded-xl self-start sm:self-auto"
-          >
-            <UserPlus className="size-4" /> Add Borrower to Line
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Button asChild variant="outline" size="sm" className="font-semibold text-xs gap-1.5 rounded-xl">
+              <Link to="/app/collections" search={{ lineId: activeLine.public_id, dateFrom: selectedDateFrom, dateTo: selectedDateTo } as any}>
+                <Receipt className="size-3.5 text-primary" /> View in Collections
+              </Link>
+            </Button>
+            <Button
+              onClick={onAddCustomerClick}
+              size="sm"
+              className="bg-primary text-primary-foreground font-bold text-xs gap-1.5 shadow-xs rounded-xl"
+            >
+              <UserPlus className="size-4" /> Add Borrower to Line
+            </Button>
+          </div>
         </div>
 
         {/* Dynamic Financial Summary Cards (Rendered in ONE Single Row) */}

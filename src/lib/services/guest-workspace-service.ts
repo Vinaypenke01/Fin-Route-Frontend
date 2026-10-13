@@ -509,6 +509,46 @@ export const guestWorkspaceService = {
   },
 
   /**
+   * Multi-Device Route Settlements & Active Routes Synchronization
+   */
+  async getRouteSettlementsSync(): Promise<{
+    settlements: Record<string, any>;
+    active_routes: Record<string, any>;
+  }> {
+    try {
+      const res = await apiRequest<{
+        settlements: Record<string, any>;
+        active_routes: Record<string, any>;
+      }>(`/app/route-settlements/`);
+      return res.data || { settlements: {}, active_routes: {} };
+    } catch {
+      return { settlements: {}, active_routes: {} };
+    }
+  },
+
+  async syncRouteSettlements(payload: {
+    settlements?: Record<string, any>;
+    active_routes?: Record<string, any>;
+    cleared_active_keys?: string[];
+  }): Promise<{
+    settlements: Record<string, any>;
+    active_routes: Record<string, any>;
+  }> {
+    try {
+      const res = await apiRequest<{
+        settlements: Record<string, any>;
+        active_routes: Record<string, any>;
+      }>(`/app/route-settlements/`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return res.data || { settlements: {}, active_routes: {} };
+    } catch {
+      return { settlements: {}, active_routes: {} };
+    }
+  },
+
+  /**
    * Download complete JSON backup of all workspace records.
    */
   async downloadFullDataBackup(): Promise<void> {

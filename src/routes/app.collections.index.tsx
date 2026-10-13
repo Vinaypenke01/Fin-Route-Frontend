@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Download, ListChecks, Calendar, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2, ChevronLeft, ChevronRight, SlidersHorizontal, Clock, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Plus, Download, ListChecks, Calendar, CalendarDays, CheckCircle2, Lock, Users, ArrowRight, Eye, Pencil, MapPin, Trash2, ChevronLeft, ChevronRight, SlidersHorizontal, Clock, ChevronUp, ChevronDown, Play, Square, Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "sonner";
 import { inr } from "@/lib/utils";
 import { guestWorkspaceService, Collection, Customer, WorkspaceData, CollectionLine } from "@/lib/services/guest-workspace-service";
 import { mastersService, MasterItem } from "@/lib/services/masters-service";
@@ -22,8 +23,22 @@ import { TableSkeletonRows, CardSkeleton } from "@/components/ui/skeleton-loader
 import { GuestPlanUsage } from "@/components/guest-plan-usage";
 import { FeaturePaywallGuard } from "@/components/feature-paywall-guard";
 import { SubscriptionExpiryBanner } from "@/components/subscription-expiry-banner";
+import type { RouteSettlementAnalytics } from "@/components/daily-sheet/stop-route-modal";
+
+export interface CollectionsSearch {
+  lineId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  day?: string;
+}
 
 export const Route = createFileRoute("/app/collections/")({
+  validateSearch: (search: Record<string, unknown>): CollectionsSearch => ({
+    lineId: (search.lineId as string) || (search.line as string) || "",
+    dateFrom: (search.dateFrom as string) || "",
+    dateTo: (search.dateTo as string) || "",
+    day: (search.day as string) || "all",
+  }),
   head: () => ({ meta: [{ title: "Collections — FinRoute" }, { name: "description", content: "Digital collection register and route customer schedule." }] }),
   component: CollectionsPage,
 });
@@ -46,6 +61,20 @@ const getTodayStr = () => {
   return `${year}-${month}-${day}`;
 };
 const today = getTodayStr();
+
+export const getLocalDateString = (isoStr?: string | null): string => {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return String(isoStr).slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  } catch {
+    return String(isoStr).slice(0, 10);
+  }
+};
 
 export const formatFilterDate = (dStr: string) => {
   if (!dStr) return "All";
@@ -209,22 +238,24 @@ function InstallmentPassbookGrid({
 }
 
 function CollectionsPage() {
+  const search = useSearch({ from: "/app/collections/" });
+  const navigate = useNavigate({ from: "/app/collections/" });
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
   const [configuredDays, setConfiguredDays] = useState<string[]>([]);
-  const [selectedDay, setSelectedDay] = useState<string>("all");
+  const [selectedDay, setSelectedDay] = useState<string>(search.day || "all");
 
-  // Date & Cycle Filtration State
-  const [dateFrom, setDateFrom] = useState<string>(today);
-  const [dateTo, setDateTo] = useState<string>(today);
-  const [selectedDate, setSelectedDate] = useState<string>(today);
+  // Date & Cycle Filtration State - initialized from search parameters or today
+  const [dateFrom, setDateFrom] = useState<string>(search.dateFrom || today);
+  const [dateTo, setDateTo] = useState<string>(search.dateTo || today);
+  const [selectedDate, setSelectedDate] = useState<string>(search.dateFrom || today);
   const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number | null>(null);
 
   const isSelectedDateToday = selectedDate === today;
 
-  // Line / Route State
+  // Line / Route State - initialized from search parameters if provided
   const [lines, setLines] = useState<CollectionLine[]>([]);
-  const [selectedLine, setSelectedLine] = useState<string>("all");
+  const [selectedLine, setSelectedLine] = useState<string>(search.lineId || "all");
   const [selectedPortion, setSelectedPortion] = useState<string>("all");
   const [isLineModalOpen, setIsLineModalOpen] = useState(false);
   const [lineToEdit, setLineToEdit] = useState<CollectionLine | null>(null);
@@ -241,9 +272,126 @@ function CollectionsPage() {
 
   const triggerReconRefresh = () => setReconRefreshKey((k) => k + 1);
 
-  const [markingPaidCustomer, setMarkingPaidCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
   const [extendingCustomer, setExtendingCustomer] = useState<Customer | null>(null);
+  const [markingPaidCustomer, setMarkingPaidCustomer] = useState<Customer | null>(null);
+
+  // Route Started Active Tracking State (Persisted in localStorage across page refreshes & sessions)
+  const [routeStartedMap, setRouteStartedMap] = useState<
+    Record<string, { isStarted: boolean; openingCash: number }>
+  >(() => {
+    try {
+      const saved = localStorage.getItem("finroute_active_routes_map");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Route Settlement Analytics State (Persisted in localStorage & Server DB across sessions & devices)
+  const [settlementMap, setSettlementMap] = useState<Record<string, RouteSettlementAnalytics>>(() => {
+    try {
+      const saved = localStorage.getItem("finroute_settlement_analytics_map");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Multi-Device Server Synchronization for Route Settlements & Active Routes
+  useEffect(() => {
+    const syncWithServer = async () => {
+      try {
+        const remoteData = await guestWorkspaceService.getRouteSettlementsSync();
+        const remoteSettlements = remoteData.settlements || {};
+        const remoteActive = remoteData.active_routes || {};
+
+        setSettlementMap((localPrev) => {
+          const merged = { ...remoteSettlements, ...localPrev };
+          const hasLocalOnly = Object.keys(localPrev).some((k) => !remoteSettlements[k]);
+          if (hasLocalOnly) {
+            guestWorkspaceService.syncRouteSettlements({ settlements: merged });
+          }
+          try {
+            localStorage.setItem("finroute_settlement_analytics_map", JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        });
+
+        setRouteStartedMap((localPrev) => {
+          const merged = { ...remoteActive, ...localPrev };
+          try {
+            localStorage.setItem("finroute_active_routes_map", JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        });
+      } catch (err) {
+        console.warn("Failed to sync route settlements with server:", err);
+      }
+    };
+    syncWithServer();
+  }, []);
+
+  // Active Line Object
+  const activeLineObj = useMemo(() => {
+    if (selectedLine !== "all") {
+      return lines.find((l) => l.public_id === selectedLine) || null;
+    }
+    if (lines.length === 1) {
+      return lines[0];
+    }
+    return null;
+  }, [lines, selectedLine]);
+
+  // Route Started state for activeLine & date
+  const cycleRouteKey = activeLineObj ? `${activeLineObj.public_id}_${dateFrom}_${dateTo}` : "";
+  const singleRouteKey = activeLineObj ? `${activeLineObj.public_id}_${selectedDate}_${selectedDate}` : "";
+  const fallbackRouteKey = activeLineObj ? `${activeLineObj.public_id}_${selectedDate}` : "";
+
+  const activeRouteTrack = activeLineObj
+    ? routeStartedMap[cycleRouteKey] || routeStartedMap[singleRouteKey] || routeStartedMap[fallbackRouteKey]
+    : null;
+  const isRouteStarted = !!activeRouteTrack?.isStarted;
+  const routeOpeningCash = activeRouteTrack?.openingCash || 0;
+
+  const cycleSettlementKey = activeLineObj ? `${activeLineObj.public_id}_${dateFrom}_${dateTo}` : "";
+  const singleSettlementKey = activeLineObj ? `${activeLineObj.public_id}_${selectedDate}_${selectedDate}` : "";
+  const currentSettlement = activeLineObj
+    ? settlementMap[cycleSettlementKey] || settlementMap[singleSettlementKey]
+    : null;
+  const isSettled = !!currentSettlement?.isSettled;
+
+  // Resolve Previous Settled Cycle's Net Closing Hand Cash Float
+  const previousCycleClosingCash = useMemo(() => {
+    if (!activeLineObj) return 0;
+    const settledKeys = Object.keys(settlementMap).filter(
+      (k) => k.startsWith(activeLineObj.public_id) && settlementMap[k]?.isSettled
+    );
+    if (settledKeys.length === 0) return 0;
+
+    const lastKey = settledKeys[settledKeys.length - 1];
+    return settlementMap[lastKey]?.netHandCash || 0;
+  }, [activeLineObj, settlementMap]);
+
+  // Resolve Line Creation Anchor Date (Collections are active only from this date onwards)
+  const lineCreatedDate = useMemo(() => {
+    if (activeLineObj?.created_at) {
+      return getLocalDateString(activeLineObj.created_at);
+    }
+    if (lines.length > 0) {
+      let earliest = "";
+      lines.forEach((l) => {
+        if (l.created_at) {
+          const lDate = getLocalDateString(l.created_at);
+          if (lDate && (!earliest || lDate < earliest)) {
+            earliest = lDate;
+          }
+        }
+      });
+      if (earliest) return earliest;
+    }
+    return "";
+  }, [activeLineObj, lines]);
 
   // ─── Earliest Anchor Date & Weekly Cycles Calculation ───────────────────────
   const earliestAnchorDate = useMemo(() => {
@@ -308,7 +456,14 @@ function CollectionsPage() {
 
   const weeklyCycles = useMemo(() => {
     if (!earliestAnchorDate) return [];
-    const cycles: { index: number; label: string; dateFrom: string; dateTo: string; isCurrent: boolean }[] = [];
+    const cycles: {
+      index: number;
+      label: string;
+      dateFrom: string;
+      dateTo: string;
+      isCurrent: boolean;
+      isPriorToLineCreation: boolean;
+    }[] = [];
 
     let weekStart = new Date(earliestAnchorDate);
     if (isNaN(weekStart.getTime())) return [];
@@ -358,12 +513,16 @@ function CollectionsPage() {
         ? formatShortDate(cycleFrom)
         : `${formatShortDate(cycleFrom)} - ${formatShortDate(cycleTo)}`;
 
+      // A cycle is prior to line creation if the cycle ended strictly before the line was created
+      const isPriorToLineCreation = Boolean(lineCreatedDate && cycleTo < lineCreatedDate);
+
       cycles.push({
         index: weekIndex,
         label: `Week ${weekIndex} (${dateRangeLabel})${isCurrent ? " ★ Current Week" : ""}`,
         dateFrom: cycleFrom,
         dateTo: cycleTo,
         isCurrent,
+        isPriorToLineCreation,
       });
 
       if (weekStart > now) break;
@@ -372,23 +531,48 @@ function CollectionsPage() {
     }
 
     return cycles;
-  }, [earliestAnchorDate, activeTargetDaysOfWeek, today]);
+  }, [earliestAnchorDate, activeTargetDaysOfWeek, today, lineCreatedDate]);
+
+  const availableCycles = useMemo(
+    () => weeklyCycles.filter((c) => !c.isPriorToLineCreation),
+    [weeklyCycles]
+  );
+  const minAvailableCycleIndex = availableCycles.length > 0 ? availableCycles[0].index : 1;
+  const maxAvailableCycleIndex = availableCycles.length > 0 ? availableCycles[availableCycles.length - 1].index : weeklyCycles.length;
 
   const [hasUserManuallySelectedCycle, setHasUserManuallySelectedCycle] = useState(false);
 
-  // Auto-select active week cycle: restore from sessionStorage if available, else current active week
+  // Auto-select active week cycle: restore from search params, sessionStorage if available, else current active week
   useEffect(() => {
-    if (weeklyCycles.length > 0 && !hasUserManuallySelectedCycle) {
-      const savedCycleIdxStr = sessionStorage.getItem("finroute_active_week_cycle_index");
+    if (weeklyCycles.length > 0) {
+      const validCycles = weeklyCycles.filter((c) => !c.isPriorToLineCreation);
+      if (validCycles.length === 0) return;
+
+      const currentSelected = weeklyCycles.find((c) => c.index === selectedCycleIndex);
+      const isCurrentSelectedValid = currentSelected && !currentSelected.isPriorToLineCreation;
+
+      // If user has manually selected a valid cycle for this line, maintain it
+      if (hasUserManuallySelectedCycle && isCurrentSelectedValid) {
+        return;
+      }
+
       let cycleToSelect = null;
 
-      if (savedCycleIdxStr) {
-        const savedIdx = parseInt(savedCycleIdxStr, 10);
-        cycleToSelect = weeklyCycles.find((c) => c.index === savedIdx);
+      if (search.dateFrom && search.dateTo) {
+        cycleToSelect = validCycles.find((c) => c.dateFrom === search.dateFrom && c.dateTo === search.dateTo)
+          || validCycles.find((c) => c.dateFrom <= search.dateFrom! && c.dateTo >= search.dateTo!);
       }
 
       if (!cycleToSelect) {
-        cycleToSelect = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
+        const savedCycleIdxStr = sessionStorage.getItem("finroute_active_week_cycle_index");
+        if (savedCycleIdxStr) {
+          const savedIdx = parseInt(savedCycleIdxStr, 10);
+          cycleToSelect = validCycles.find((c) => c.index === savedIdx);
+        }
+      }
+
+      if (!cycleToSelect) {
+        cycleToSelect = validCycles.find((c) => c.isCurrent) || validCycles[validCycles.length - 1];
       }
 
       if (cycleToSelect) {
@@ -396,9 +580,10 @@ function CollectionsPage() {
         setDateFrom(cycleToSelect.dateFrom);
         setDateTo(cycleToSelect.dateTo);
         setSelectedDate(cycleToSelect.dateFrom);
+        sessionStorage.setItem("finroute_active_week_cycle_index", String(cycleToSelect.index));
       }
     }
-  }, [weeklyCycles, hasUserManuallySelectedCycle]);
+  }, [weeklyCycles, hasUserManuallySelectedCycle, selectedCycleIndex, search.dateFrom, search.dateTo]);
 
   // Sync selectedDate with dateFrom when a week cycle is active
   useEffect(() => {
@@ -410,6 +595,12 @@ function CollectionsPage() {
   const handleSelectCycle = (index: number) => {
     const cycle = weeklyCycles.find((c) => c.index === index);
     if (cycle) {
+      if (cycle.isPriorToLineCreation) {
+        toast.info(
+          `This cycle is prior to line creation date (${formatFilterDate(lineCreatedDate)}). Collections start from this date.`
+        );
+        return;
+      }
       setSelectedCycleIndex(cycle.index);
       setDateFrom(cycle.dateFrom);
       setDateTo(cycle.dateTo);
@@ -420,21 +611,27 @@ function CollectionsPage() {
   };
 
   const handlePrevWeek = () => {
-    const currentIdx = selectedCycleIndex || 1;
-    if (currentIdx > 1) {
-      handleSelectCycle(currentIdx - 1);
+    const currentIdx = selectedCycleIndex || minAvailableCycleIndex;
+    if (currentIdx > minAvailableCycleIndex) {
+      const prevCycles = availableCycles.filter((c) => c.index < currentIdx);
+      if (prevCycles.length > 0) {
+        handleSelectCycle(prevCycles[prevCycles.length - 1].index);
+      }
     }
   };
 
   const handleNextWeek = () => {
     const currentIdx = selectedCycleIndex || 1;
-    if (currentIdx < weeklyCycles.length) {
-      handleSelectCycle(currentIdx + 1);
+    if (currentIdx < maxAvailableCycleIndex) {
+      const nextCycles = weeklyCycles.filter((c) => c.index > currentIdx);
+      if (nextCycles.length > 0) {
+        handleSelectCycle(nextCycles[0].index);
+      }
     }
   };
 
   const handlePresetCurrentWeek = () => {
-    const active = weeklyCycles.find((c) => c.isCurrent) || weeklyCycles[weeklyCycles.length - 1];
+    const active = availableCycles.find((c) => c.isCurrent) || availableCycles[availableCycles.length - 1];
     if (active) {
       handleSelectCycle(active.index);
     } else {
@@ -508,21 +705,26 @@ function CollectionsPage() {
       const loadedLines = data || [];
       setLines(loadedLines);
 
-      // Auto-select line & portion matching today's day of week & time session
+      // Auto-select line: honor search.lineId if present, else today's line or first line
       const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
       const currentHour = new Date().getHours();
       const currentSessionPortion: "morning" | "afternoon" = currentHour < 13 ? "morning" : "afternoon";
 
-      const lineForToday = loadedLines.find((ln) =>
-        ln.day_schedules?.some((s) => s.day_of_week.toLowerCase() === currentDayName)
-      );
+      if (search.lineId && loadedLines.some((ln) => ln.public_id === search.lineId)) {
+        setSelectedLine(search.lineId);
+        setSelectedPortion("all");
+      } else {
+        const lineForToday = loadedLines.find((ln) =>
+          ln.day_schedules?.some((s) => s.day_of_week.toLowerCase() === currentDayName)
+        );
 
-      if (lineForToday) {
-        setSelectedLine(lineForToday.public_id);
-        setSelectedPortion("all");
-      } else if (loadedLines.length > 0) {
-        setSelectedLine(loadedLines[0].public_id);
-        setSelectedPortion("all");
+        if (lineForToday) {
+          setSelectedLine(lineForToday.public_id);
+          setSelectedPortion("all");
+        } else if (loadedLines.length > 0) {
+          setSelectedLine(loadedLines[0].public_id);
+          setSelectedPortion("all");
+        }
       }
     } catch (err) {
       console.error("Failed to load lines:", err);
@@ -538,15 +740,11 @@ function CollectionsPage() {
       const savedDays = ws.allowed_collection_days || [];
       setConfiguredDays(savedDays);
 
-      const currentDayName = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-      if (savedDays.includes(currentDayName)) {
-        setSelectedDay(currentDayName);
-      } else if (savedDays.length === 1) {
-        setSelectedDay(savedDays[0]);
-      } else if (savedDays.length > 1) {
-        setSelectedDay("all");
+      // Default to "all" (or search.day if explicitly provided) so all route borrowers are visible
+      if (search.day) {
+        setSelectedDay(search.day);
       } else {
-        setSelectedDay(currentDayName);
+        setSelectedDay("all");
       }
     } catch (err) {
       console.error("Workspace load error:", err);
@@ -695,12 +893,18 @@ function CollectionsPage() {
     return map;
   }, [allLineCollections]);
 
-  // Total Expected (excludes fully settled accounts with 0 outstanding balance)
+  // Total Expected (excludes fully settled accounts with 0 outstanding balance and no activity in this cycle)
   const totalExpected = useMemo(() => {
     return routeCustomers
-      .filter((c) => Number(c.outstanding_balance || 0) > 0 && c.status !== "closed")
+      .filter((c) => {
+        const pId = String(c.public_id).toLowerCase();
+        const cCode = String(c.customer_code).toLowerCase();
+        const hasActivityInCycle = paidOnSelectedDateSet.has(pId) || paidOnSelectedDateSet.has(cCode);
+        const hasOutstandingBalance = Number(c.outstanding_balance || 0) > 0 && c.status !== "closed";
+        return hasOutstandingBalance || hasActivityInCycle;
+      })
       .reduce((s, c) => s + Number(c.installment_amount || c.loan_amount || 0), 0);
-  }, [routeCustomers]);
+  }, [routeCustomers, paidOnSelectedDateSet]);
 
   // Total Collected in Selected Date Range
   const totalCollectedForSelectedDate = useMemo(() => {
@@ -768,7 +972,8 @@ function CollectionsPage() {
 
   const filteredCollections = collections.filter((c) => {
     const entryDate = c.collection_date ? String(c.collection_date).slice(0, 10) : (c.created_at ? String(c.created_at).slice(0, 10) : "");
-    const matchesDate = !selectedDate || entryDate === selectedDate;
+    const inRange = (!dateFrom || entryDate >= dateFrom) && (!dateTo || entryDate <= dateTo);
+    const matchesDate = (dateFrom && dateTo) ? inRange : (!selectedDate || entryDate === selectedDate);
     const matchesSearch =
       !q ||
       c.customer_name?.toLowerCase().includes(q.toLowerCase()) ||
@@ -781,6 +986,27 @@ function CollectionsPage() {
       <div className="space-y-6">
       <GuestPlanUsage />
       <SubscriptionExpiryBanner />
+
+      {/* View-Only Passbook & Audit Mode Notice Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-muted/40 border border-border/80 text-xs shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="size-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Eye className="size-4" />
+          </div>
+          <div>
+            <p className="font-bold text-foreground">View-Only Passbook & Audit Register</p>
+            <p className="text-[11px] text-muted-foreground">
+              Review customer installment passbooks, payment histories, and loan balances. To record field collections or start/stop routes, please use the <strong>Daily Sheet</strong>.
+            </p>
+          </div>
+        </div>
+        <Button asChild size="sm" className="h-8 text-xs font-bold gap-1.5 shadow-xs">
+          <Link to="/app/daily-sheet" search={{ view: "sheet", lineId: selectedLine !== "all" ? selectedLine : undefined, dateFrom, dateTo } as any}>
+            <CalendarDays className="size-3.5" /> Open Daily Sheet
+          </Link>
+        </Button>
+      </div>
+
       {/* 0. Daily Cash Flow & Reconciliation Card for Selected Line */}
       <DailyCashReconciliationCard
         date={selectedDate}
@@ -875,6 +1101,7 @@ function CollectionsPage() {
                   const nextLine = selectedLine === ln.public_id ? "all" : ln.public_id;
                   setSelectedLine(nextLine);
                   setSelectedDay("all");
+                  setHasUserManuallySelectedCycle(false);
                 }}
                 className={`p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-1.5 ${
                   selectedLine === ln.public_id
@@ -1073,7 +1300,7 @@ function CollectionsPage() {
             variant="outline"
             size="sm"
             onClick={handlePrevWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex <= 1}
+            disabled={!selectedCycleIndex || selectedCycleIndex <= minAvailableCycleIndex}
             className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
             title="Previous Week Cycle"
           >
@@ -1090,6 +1317,31 @@ function CollectionsPage() {
               </SelectTrigger>
               <SelectContent className="max-h-64">
                 {weeklyCycles.map((cycle) => {
+                  // 1. Weeks prior to line creation: displayed in the dropdown but disabled and unclickable
+                  if (cycle.isPriorToLineCreation) {
+                    return (
+                      <SelectItem
+                        key={cycle.index}
+                        value={String(cycle.index)}
+                        disabled={true}
+                        className="text-xs font-medium opacity-50 cursor-not-allowed select-none bg-muted/20 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                      >
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="font-medium text-muted-foreground flex items-center gap-1.5">
+                            <Lock className="size-3 text-muted-foreground/70 shrink-0" />
+                            {cycle.label.replace(" ★ Current Week", "")}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 px-1.5 bg-muted/60 text-muted-foreground border-border/60 font-normal shrink-0 flex items-center gap-1"
+                          >
+                            <Lock className="size-2.5" /> Prior to Line Setup
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    );
+                  }
+
                   const isFutureWeek = cycle.dateFrom > today;
 
                   // Future weeks that have not arrived yet are upcoming
@@ -1173,7 +1425,7 @@ function CollectionsPage() {
             variant="outline"
             size="sm"
             onClick={handleNextWeek}
-            disabled={!selectedCycleIndex || selectedCycleIndex >= weeklyCycles.length}
+            disabled={!selectedCycleIndex || selectedCycleIndex >= maxAvailableCycleIndex}
             className="h-9 px-3 text-xs font-bold gap-1 shrink-0"
             title="Next Week Cycle"
           >
@@ -1230,9 +1482,41 @@ function CollectionsPage() {
               </Card>
             </div>
 
+            {/* Closed & Settled Analytics Banner (Matching Daily Sheet Level 3) */}
+            {isSettled && currentSettlement && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="size-4 text-emerald-600" /> Route Status: Closed & Settled
+                  </span>
+                  <Badge className="bg-emerald-600 text-white font-mono font-bold text-xs px-2.5 py-0.5">
+                    {inr(currentSettlement.netHandCash)} Net Handover Cash
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+                  <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                    <span className="text-[9px] text-muted-foreground uppercase font-bold block">Opening Cash</span>
+                    <span className="font-bold text-foreground">{inr(currentSettlement.openingCash)}</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 uppercase font-bold block">Collected</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{inr(currentSettlement.totalCollected)}</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                    <span className="text-[9px] text-rose-600 dark:text-rose-400 uppercase font-bold block">Disbursed</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">{inr(currentSettlement.totalDisbursed)}</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-background/80 border border-border/60">
+                    <span className="text-[9px] text-amber-600 dark:text-amber-400 uppercase font-bold block">Expenses</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">{inr(currentSettlement.totalExpenses)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 3. Route Day Customers List Card */}
             <Card className="overflow-hidden">
-              {/* Card Header with title and batch button */}
+              {/* Card Header with title and route start/stop controls */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-4">
                 <div className="flex items-center gap-2">
                   <Users className="size-5 text-primary" />
@@ -1252,11 +1536,47 @@ function CollectionsPage() {
                     </p>
                   </div>
                 </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/app/collections/batch" search={{ day: selectedDay }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Distinct 3-State Route Status Indicators */}
+                  {isSettled ? (
+                    <Badge className="bg-emerald-600 text-white font-black text-xs px-3 py-1 gap-1.5 shadow-xs">
+                      <CheckCircle2 className="size-3.5" /> Route Settled & Closed
+                    </Badge>
+                  ) : isRouteStarted ? (
+                    <Badge className="bg-emerald-600 text-white font-bold text-xs px-3 py-1 gap-1.5 shadow-xs">
+                      <Play className="size-3.5 fill-current" /> Route Active in Daily Sheet (Opening: {inr(routeOpeningCash)})
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs px-2.5 py-1 gap-1 font-semibold">
+                      Passbook View
+                    </Badge>
+                  )}
+
+                  <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1.5">
+                    <Link
+                      to="/app/daily-sheet"
+                      search={{
+                        view: "sheet",
+                        lineId: selectedLine !== "all" ? selectedLine : undefined,
+                        dateFrom: dateFrom,
+                        dateTo: dateTo,
+                      } as any}
+                    >
+                      <CalendarDays className="size-3.5 text-primary" /> Daily Sheet Collections
+                    </Link>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold"
+                    onClick={() => {
+                      navigate({ to: "/app/collections/batch", search: { day: selectedDay } as any });
+                    }}
+                  >
                     <ListChecks className="size-4 mr-1" /> Batch Collect
-                  </Link>
-                </Button>
+                  </Button>
+                </div>
               </div>
 
               {/* ─── Search & Date Filter Bar ─── */}
@@ -1693,6 +2013,8 @@ function CollectionsPage() {
           open={Boolean(markingPaidCustomer)}
           setOpen={(v) => !v && setMarkingPaidCustomer(null)}
           initialCollectionDate={selectedDate}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           onSuccess={() => {
             setMarkingPaidCustomer(null);
             loadRouteCustomers();
@@ -1804,17 +2126,41 @@ function MarkAsPaidModal({
   open,
   setOpen,
   initialCollectionDate,
+  dateFrom,
+  dateTo,
   onSuccess,
 }: {
   customer: Customer;
   open: boolean;
   setOpen: (v: boolean) => void;
   initialCollectionDate?: string;
+  dateFrom?: string;
+  dateTo?: string;
   onSuccess: () => void;
 }) {
   const defaultAmount = customer.installment_amount || customer.loan_amount || 0;
 
-  const [collectionDate, setCollectionDate] = useState<string>(initialCollectionDate || today);
+  // Compute scheduled collection date in the active week cycle for this borrower
+  const computeDefaultDate = () => {
+    if (customer.collection_day && dateFrom && dateTo) {
+      const targetDay = customer.collection_day.toLowerCase();
+      const cur = new Date(dateFrom + "T00:00:00");
+      const end = new Date(dateTo + "T00:00:00");
+      while (cur <= end) {
+        const dayName = cur.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+        if (dayName === targetDay) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, "0");
+          const d = String(cur.getDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return initialCollectionDate || today;
+  };
+
+  const [collectionDate, setCollectionDate] = useState<string>(computeDefaultDate());
   const [expectedAmount, setExpectedAmount] = useState<string>(defaultAmount ? String(defaultAmount) : "");
   const [collectedAmount, setCollectedAmount] = useState<string>(defaultAmount ? String(defaultAmount) : "");
   const [paymentModes, setPaymentModes] = useState<MasterItem[]>([]);
@@ -1843,11 +2189,11 @@ function MarkAsPaidModal({
     }
     if (open) {
       loadMasters();
-      setCollectionDate(initialCollectionDate || today);
+      setCollectionDate(computeDefaultDate());
       setExpectedAmount(defaultAmount ? String(defaultAmount) : "");
       setCollectedAmount(defaultAmount ? String(defaultAmount) : "");
     }
-  }, [open, initialCollectionDate, defaultAmount]);
+  }, [open, initialCollectionDate, dateFrom, dateTo, customer.collection_day, defaultAmount]);
 
   const currentStatusObj = statuses.find((s) => s.id === selectedStatus);
   const isSkippedSelected = currentStatusObj?.code === "skipped" || currentStatusObj?.name?.toLowerCase().includes("skipped");
